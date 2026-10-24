@@ -5,6 +5,8 @@ import com.saikalyan.jobmate.domain.model.JobDashboardSummary
 import com.saikalyan.jobmate.domain.model.JobStatus
 import com.saikalyan.jobmate.domain.repository.JobRepository
 import com.saikalyan.jobmate.domain.repository.RepositoryResult
+import com.saikalyan.jobmate.worker.FollowUpScheduler
+import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -51,7 +53,7 @@ class JobWorkflowViewModelTest {
 
     @Test
     fun editorRejectsInvertedExperienceRange() {
-        val viewModel = JobEditorViewModel(repository, Clock.systemUTC())
+        val viewModel = JobEditorViewModel(repository, Clock.systemUTC(), mockk<FollowUpScheduler>(relaxed = true))
         viewModel.updateForm(JobEditorForm(title = "Engineer", companyName = "Northwind", experienceMin = "5", experienceMax = "2"))
         viewModel.save()
         assertEquals("Experience range is invalid.", viewModel.uiState.value.validationMessage)
