@@ -3,7 +3,7 @@
 **Last updated:** 2026-10-24  
 **Overall status:** Source implementation has reached Phase 9. The app has not passed a full build, CI run, or device verification. Do not treat the project as complete or verified.
 
-**Build compatibility update:** application `compileSdk` is now 37 to address dependency AAR metadata requirements; `targetSdk` remains 36 and `minSdk` remains 26. CI is configured for Platform 37 and Build Tools 37.0.0. The change is pending a successful CI run.
+**Build compatibility update:** application `compileSdk` is 37 to address dependency AAR metadata requirements; `targetSdk` remains 36 and `minSdk` remains 26. CI requests SDK package `platforms;android-37.0` and Build Tools 37.0.0. The change is pending a successful CI run.
 
 The audit on 2026-10-24 found that this workspace currently has a Git checkout on `main` tracking `origin/main` and a configured GitHub remote. Earlier statements below claiming no `.git` directory or remote are stale. The audit did not push, commit, or query GitHub Actions.
 

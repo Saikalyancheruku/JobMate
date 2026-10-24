@@ -34,7 +34,7 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install Android SDK 37 packages
-        run: sdkmanager --install "cmdline-tools;latest" "platform-tools" "platforms;android-37" "build-tools;37.0.0"
+        run: sdkmanager --install "cmdline-tools;latest" "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"
 
       - name: Set up Gradle and cache dependencies
         uses: gradle/actions/setup-gradle@v6.4.0
