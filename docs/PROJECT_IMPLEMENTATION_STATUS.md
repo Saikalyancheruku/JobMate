@@ -1,0 +1,53 @@
+# JobMate project implementation status
+
+**Last updated:** 2026-10-24  
+**Overall status:** Source implementation has reached Phase 9. The app has not passed a full build, CI run, or device verification. Do not treat the project as complete or verified.
+
+## Progress by phase
+
+| Phase | Work recorded so far | What is still unverified or incomplete |
+|---|---|---|
+| 0 — Foundation | Gradle wrapper, Android app module, manifest, Hilt, Compose navigation/theme, and GitHub Actions workflow are present. | Step 08 is blocked: no successful compile, lint, test run, or APK build. The recorded attempt stopped before Gradle tasks because Android SDK configuration was missing. |
+| 1 — Domain and database | Models, Room entities/DAOs/database, repositories, and JVM test source are present. | Compilation and the tests have not been run. |
+| 2 — Dashboard and jobs | Dashboard, job list/detail/editor, CRUD, filtering/search, and JVM test source are present. | Compilation and the tests have not been run. |
+| 3 — Contacts | Contact screens, CSV/XLSX import, validation, matching, and review source are present. | Feature tests and Android build/device verification are deferred. |
+| 4 — Resumes | Private PDF storage, validation, list, preview, and deletion source are present. | Feature tests and Android build/device verification are deferred. |
+| 5 — Templates and outreach | Template management, rendering, draft composition, and confirmation flow source are present. | Feature tests and Android build/device verification are deferred. |
+| 6 — Gmail SMTP | App Password storage, SMTP STARTTLS, per-recipient send/history, and settings source are present. | Compilation, tests, Gmail account authorization, and real send/device checks have not been performed. |
+| 7 — Job capture | Consent-based MediaProjection, foreground service, on-device OCR, parsing, review/save, and shared-text route source are present. | Compilation, tests, and Android device/API behavior have not been verified. |
+| 8 — Follow-ups and settings | WorkManager reminders, theme, CSV export, and local data deletion source are present. | Compilation, tests, notification behavior, export, and deletion have not been verified. |
+| 9 — Google Sheets | Google authorization, generated `JobMate Sync` sheet (`Jobs` and `Contacts` tabs), sync queue/worker, and conflict review source are present. | Google Cloud setup, compilation, tests, and real account/sync/device behavior remain pending. |
+| 10 — Delivery | The delivery workflow and checklist exist. | Not complete: run CI, fix any failures, perform device/privacy checks, and decide release signing. |
+
+Tests were explicitly deferred for the newer feature phases. Seven JVM test files currently exist for earlier jobs/database behavior; their presence does not mean they pass. No test run is recorded as successful.
+
+## Remaining work
+
+### Google Cloud setup for Sheets
+
+1. Select or create a Google Cloud project.
+2. Enable the Google Sheets API.
+3. Configure Google Auth Platform consent for testing, select the applicable audience, and add the Google account(s) used for testing.
+4. Create an Android OAuth client with package `com.saikalyan.jobmate` and the SHA-1 fingerprint of the certificate that signs the APK to be installed.
+
+### GitHub Actions setup and verification
+
+1. Put the project in the GitHub repository that will run `.github/workflows/android-ci.yml`. This workspace currently has no `.git` directory or GitHub remote; nothing has been pushed.
+2. Choose a stable test signing key for downloadable CI APKs. The current workflow relies on the runner's default debug key, which can differ on a fresh runner. To test Sheets from an APK downloaded from Actions, store a dedicated test keystore as GitHub Secrets (never commit it) and update the workflow to sign with it. Register that key's SHA-1 in the Android OAuth client.
+3. Trigger the workflow. It is configured to run `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug`, then upload the debug APK. Fix any failures and record the actual results.
+4. Install the produced APK on an Android device and manually verify Google authorization, sheet creation/sync/conflicts, and the app features. CI does not launch the app or exercise interactive Google authorization on a device.
+
+### After CI
+
+- Add/execute the deferred feature test coverage when requested.
+- Verify Gmail SMTP with a test account, and verify capture, notifications, import/export, and deletion on supported Android versions.
+- Decide release signing if distributing a release APK. The current workflow produces a debug APK only.
+
+## Actual verification record
+
+- The Phase 0 build attempt failed before the requested Gradle tasks because `ANDROID_HOME` / `sdk.dir` was not configured.
+- GitHub Actions has not been triggered.
+- No successful full compilation, lint, test run, device check, or APK output is recorded.
+- No Git repository was initialized and nothing was pushed.
+
+See the [implementation plan](../JOBMATE_IMPLEMENTATION_PLAN.md) and individual reports in [`progress/`](progress/) for step-by-step details.

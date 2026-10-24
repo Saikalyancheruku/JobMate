@@ -1,0 +1,53 @@
+package com.saikalyan.jobmate.data.local
+
+import androidx.room.Database
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+import com.saikalyan.jobmate.data.local.converters.AppTypeConverters
+import com.saikalyan.jobmate.data.local.dao.ContactDao
+import com.saikalyan.jobmate.data.local.dao.EmailAttemptDao
+import com.saikalyan.jobmate.data.local.dao.EmailTemplateDao
+import com.saikalyan.jobmate.data.local.dao.JobContactDao
+import com.saikalyan.jobmate.data.local.dao.JobDao
+import com.saikalyan.jobmate.data.local.dao.OutreachDao
+import com.saikalyan.jobmate.data.local.dao.ResumeDao
+import com.saikalyan.jobmate.data.local.dao.SyncConflictDao
+import com.saikalyan.jobmate.data.local.dao.SyncQueueDao
+import com.saikalyan.jobmate.data.local.entity.ContactEntity
+import com.saikalyan.jobmate.data.local.entity.EmailAttemptEntity
+import com.saikalyan.jobmate.data.local.entity.EmailTemplateEntity
+import com.saikalyan.jobmate.data.local.entity.JobContactEntity
+import com.saikalyan.jobmate.data.local.entity.JobEntity
+import com.saikalyan.jobmate.data.local.entity.OutreachEntity
+import com.saikalyan.jobmate.data.local.entity.ResumeEntity
+import com.saikalyan.jobmate.data.local.entity.SyncConflictEntity
+import com.saikalyan.jobmate.data.local.entity.SyncQueueEntity
+
+/** Initial schema version; register an explicit Migration before any future version increment. */
+@Database(
+    entities = [
+        JobEntity::class,
+        ContactEntity::class,
+        JobContactEntity::class,
+        ResumeEntity::class,
+        EmailTemplateEntity::class,
+        OutreachEntity::class,
+        EmailAttemptEntity::class,
+        SyncQueueEntity::class,
+        SyncConflictEntity::class,
+    ],
+    version = 1,
+    exportSchema = true,
+)
+@TypeConverters(AppTypeConverters::class)
+abstract class JobMateDatabase : RoomDatabase() {
+    abstract fun jobDao(): JobDao
+    abstract fun contactDao(): ContactDao
+    abstract fun jobContactDao(): JobContactDao
+    abstract fun resumeDao(): ResumeDao
+    abstract fun emailTemplateDao(): EmailTemplateDao
+    abstract fun outreachDao(): OutreachDao
+    abstract fun emailAttemptDao(): EmailAttemptDao
+    abstract fun syncQueueDao(): SyncQueueDao
+    abstract fun syncConflictDao(): SyncConflictDao
+}

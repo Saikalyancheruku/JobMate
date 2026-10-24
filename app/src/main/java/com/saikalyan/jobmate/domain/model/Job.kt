@@ -1,0 +1,28 @@
+package com.saikalyan.jobmate.domain.model
+
+import java.time.Instant
+
+/** Platform-independent representation of a saved job opportunity. */
+data class Job(
+    val id: String,
+    val title: String,
+    val companyName: String,
+    val location: String? = null,
+    val description: String? = null,
+    val skills: List<String> = emptyList(),
+    val experienceMin: Int? = null,
+    val experienceMax: Int? = null,
+    val salaryText: String? = null,
+    val employmentType: String? = null,
+    val postedAt: Instant? = null,
+    val source: String? = null,
+    val sourceUrl: String? = null,
+    val status: JobStatus = JobStatus.SAVED,
+    val appliedAt: Instant? = null,
+    val followUpAt: Instant? = null,
+    val notes: String? = null,
+    val captureMethod: String? = null,
+    val fingerprint: String,
+    val createdAt: Instant,
+    val updatedAt: Instant,
+)
