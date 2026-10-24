@@ -26,14 +26,14 @@ Update this section after every small step. Do not mark COMPLETE unless implemen
 
 | Field | Value |
 | ----- | ----- |
-| Overall project status | In progress |
-| Current phase | Phase 10 – Delivery (Phase 9 source implemented; tests and SDK/device verification deferred) |
-| Current step | PHASE-10-STEP-29 — final tests, lint, build, privacy review, and device verification |
-| Recorded step reports (implementation status is stated in each report) | Phases 0–2 reports are in `docs/progress/`; Phase 3: [Step 13](docs/progress/PHASE-03-STEP-13.md), [Step 14](docs/progress/PHASE-03-STEP-14.md), [Step 15](docs/progress/PHASE-03-STEP-15.md); Phase 4: [Step 16](docs/progress/PHASE-04-STEP-16.md), [Step 17](docs/progress/PHASE-04-STEP-17.md); Phase 5: [Step 18](docs/progress/PHASE-05-STEP-18.md), [Step 19](docs/progress/PHASE-05-STEP-19.md); Phase 6: [Step 20](docs/progress/PHASE-06-STEP-20.md), [Step 21](docs/progress/PHASE-06-STEP-21.md), [Step 22](docs/progress/PHASE-06-STEP-22.md); Phase 7 source: [Step 23](docs/progress/PHASE-07-STEP-23.md), [Step 24](docs/progress/PHASE-07-STEP-24.md), [Step 25](docs/progress/PHASE-07-STEP-25.md); Phase 8 source: [Step 26](docs/progress/PHASE-08-STEP-26.md), [Step 27](docs/progress/PHASE-08-STEP-27.md); Phase 9 source: [Step 28](docs/progress/PHASE-09-STEP-28.md), [Step 29](docs/progress/PHASE-09-STEP-29.md), [Step 30](docs/progress/PHASE-09-STEP-30.md) |
-| In-progress steps | Phases 0–9 implementation source is recorded; verification and test cases are deferred by owner; Phase 10 delivery verification pending |
-| Blocked steps | SDK-dependent compile/lint/APK verification and test cases for implemented phases; Gmail/Sheets account and device checks; Phase 9 runtime setup requires Sheets API enabled and an Android OAuth client (package and signing SHA-1); Phase 10 delivery verification |
-| Exact next step | PHASE-10-STEP-29 — after test coverage is requested and Android SDK/device setup is available, run the full delivery checks; complete Google Cloud API/OAuth setup before live Sheets verification |
-| Approved changes | v1 email = Gmail SMTP + App Password only; Phase 9 creates `JobMate Sync` with `Jobs`/`Contacts` tabs and Google authorization (`drive.file`); Phase 3–10 test cases deferred until owner requests them |
+| Overall project status | Source implementation recorded through Phase 9; build, tests, CI, and device verification pending |
+| Current phase | Phase 10 – Delivery and verification (incomplete) |
+| Current step | PHASE-10-STEP-30 — compileSdk 37 and CI SDK package configuration updated; GitHub Actions verification pending |
+| Recorded step reports (implementation status is stated in each report) | Phases 0–2 reports are in `docs/progress/`; Phase 3: [Step 13](docs/progress/PHASE-03-STEP-13.md), [Step 14](docs/progress/PHASE-03-STEP-14.md), [Step 15](docs/progress/PHASE-03-STEP-15.md); Phase 4: [Step 16](docs/progress/PHASE-04-STEP-16.md), [Step 17](docs/progress/PHASE-04-STEP-17.md); Phase 5: [Step 18](docs/progress/PHASE-05-STEP-18.md), [Step 19](docs/progress/PHASE-05-STEP-19.md); Phase 6: [Step 20](docs/progress/PHASE-06-STEP-20.md), [Step 21](docs/progress/PHASE-06-STEP-21.md), [Step 22](docs/progress/PHASE-06-STEP-22.md); Phase 7 source: [Step 23](docs/progress/PHASE-07-STEP-23.md), [Step 24](docs/progress/PHASE-07-STEP-24.md), [Step 25](docs/progress/PHASE-07-STEP-25.md); Phase 8 source: [Step 26](docs/progress/PHASE-08-STEP-26.md), [Step 27](docs/progress/PHASE-08-STEP-27.md); Phase 9 source: [Step 28](docs/progress/PHASE-09-STEP-28.md), [Step 29](docs/progress/PHASE-09-STEP-29.md), [Step 30](docs/progress/PHASE-09-STEP-30.md); Phase 10: [Step 30 — SDK compatibility](docs/progress/PHASE-10-STEP-30.md); [Project audit (2026-10-24)](docs/progress/PROJECT-AUDIT-2026-10-24.md) |
+| In-progress steps | Phase 0–9 feature source is present as documented, but that does not establish compilation or runtime behavior. Phase 10 delivery remains incomplete. |
+| Blocked steps | No configured Android SDK is present in this environment; local Java is 19 instead of the required JDK 17. Full compile/lint/tests/APK, feature tests, device checks, Gmail account checks, and live Sheets checks have no successful verification record. Sheets live setup still requires API enablement and an Android OAuth client matching the installed APK signing certificate. The CI compileSdk 37 compatibility change is not confirmed until Actions succeeds. |
+| Exact next step | Run the configured GitHub workflow with Android SDK Platform 37 and Build Tools 37.0.0, then record the actual unit-test, lint, and debug-assembly results. Add deferred phase-specific coverage when requested. Complete Google Sheets API/OAuth setup and device checks before claiming Sheets runtime verification. |
+| Approved changes | Application compileSdk = 37 to satisfy dependency AAR metadata; targetSdk remains 36 and minSdk 26; all dependency/toolchain pins, architecture, and package remain unchanged. Existing email and Sheets decisions remain as approved; Phase 3–10 test cases remain deferred until owner requests them. |
 
 Progress reports live in [`docs/progress/`](docs/progress/). One file per small step. Never overwrite an earlier step report to record a different step.
 
@@ -49,7 +49,7 @@ For the current phase-by-phase implementation status and remaining setup/verific
 | Platform | Native Android only, Kotlin, Jetpack Compose |
 | Architecture | MVVM + Repository; Room is source of truth |
 | DI | Hilt only |
-| min/compile/target | 26 / 36 / 36 |
+| min/compile/target | 26 / 37 / 36 |
 | Backend / hosting | None |
 
 **Pinned toolchain** (verify in Phase 0; adjust only if a pin is unpublished or incompatible, then stop and report):
@@ -299,7 +299,7 @@ File: `.github/workflows/android-ci.yml`
 
 - Triggers: `push`, `pull_request`, `workflow_dispatch`
 - `ubuntu-latest`, JDK 17, Android SDK cmdline tools, Gradle wrapper
-- Checkout → Java 17 → SDK + licenses + packages →
+- Checkout → Java 17 → SDK + licenses + Platform 37 / Build Tools 37.0.0 / platform-tools / command-line tools →
   `./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`
 - Upload `app/build/outputs/apk/debug/app-debug.apk`
 - No Gmail credentials, signing secrets, or OAuth secrets in GitHub
@@ -468,7 +468,7 @@ Phase 0 step tracking for the root Android project and its single `:app` module.
 | ---- | ----- | ------------ |
 | PHASE-00-STEP-01 | Verify toolchain and dependencies | Artifact existence, AGP 9 Kotlin rules, JavaMail coordinates; no Gradle module yet |
 | PHASE-00-STEP-02 | Create Gradle wrapper, root Gradle files, and version catalog | `settings.gradle.kts`, root `build.gradle.kts`, `gradle/libs.versions.toml`, wrapper files; `:app` not fully wired yet if catalog-first |
-| PHASE-00-STEP-03 | Create the `:app` module | `app/build.gradle.kts`, namespace `com.saikalyan.jobmate`, minSdk 26, compile/target 36, Compose, Hilt, KSP, Java 17; AGP 9 Kotlin rules |
+| PHASE-00-STEP-03 | Create the `:app` module | `app/build.gradle.kts`, namespace `com.saikalyan.jobmate`, minSdk 26, compileSdk 37, targetSdk 36, Compose, Hilt, KSP, Java 17; AGP 9 Kotlin rules |
 | PHASE-00-STEP-04 | Configure Android Manifest | Internet, launcher, no AccessibilityService, placeholder-safe permissions for later FGS |
 | PHASE-00-STEP-05 | Set up Hilt Application and MainActivity | `@HiltAndroidApp`, Compose `setContent` |
 | PHASE-00-STEP-06 | Set up Compose theme and navigation shell | Material 3 theme, `AppNavHost` destinations without fake completed features |

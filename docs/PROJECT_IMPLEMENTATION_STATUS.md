@@ -3,6 +3,10 @@
 **Last updated:** 2026-10-24  
 **Overall status:** Source implementation has reached Phase 9. The app has not passed a full build, CI run, or device verification. Do not treat the project as complete or verified.
 
+**Build compatibility update:** application `compileSdk` is now 37 to address dependency AAR metadata requirements; `targetSdk` remains 36 and `minSdk` remains 26. CI is configured for Platform 37 and Build Tools 37.0.0. The change is pending a successful CI run.
+
+The audit on 2026-10-24 found that this workspace currently has a Git checkout on `main` tracking `origin/main` and a configured GitHub remote. Earlier statements below claiming no `.git` directory or remote are stale. The audit did not push, commit, or query GitHub Actions.
+
 ## Progress by phase
 
 | Phase | Work recorded so far | What is still unverified or incomplete |
@@ -32,7 +36,7 @@ Tests were explicitly deferred for the newer feature phases. Seven JVM test file
 
 ### GitHub Actions setup and verification
 
-1. Put the project in the GitHub repository that will run `.github/workflows/android-ci.yml`. This workspace currently has no `.git` directory or GitHub remote; nothing has been pushed.
+1. Use the already configured GitHub repository/remote for `.github/workflows/android-ci.yml`; confirm the intended branch and repository state before triggering CI.
 2. Choose a stable test signing key for downloadable CI APKs. The current workflow relies on the runner's default debug key, which can differ on a fresh runner. To test Sheets from an APK downloaded from Actions, store a dedicated test keystore as GitHub Secrets (never commit it) and update the workflow to sign with it. Register that key's SHA-1 in the Android OAuth client.
 3. Trigger the workflow. It is configured to run `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug`, then upload the debug APK. Fix any failures and record the actual results.
 4. Install the produced APK on an Android device and manually verify Google authorization, sheet creation/sync/conflicts, and the app features. CI does not launch the app or exercise interactive Google authorization on a device.
@@ -46,8 +50,12 @@ Tests were explicitly deferred for the newer feature phases. Seven JVM test file
 ## Actual verification record
 
 - The Phase 0 build attempt failed before the requested Gradle tasks because `ANDROID_HOME` / `sdk.dir` was not configured.
-- GitHub Actions has not been triggered.
+- On 2026-10-24, `:app:tasks` configured successfully after the SDK change; `:app:checkDebugAarMetadata` could not evaluate metadata because the local Android SDK location is still missing.
+- GitHub Actions has not been triggered according to the reviewed progress records; no successful Actions result is documented here.
 - No successful full compilation, lint, test run, device check, or APK output is recorded.
-- No Git repository was initialized and nothing was pushed.
+- The audit made no Git mutations; the checkout already had `.git` and an `origin` remote.
+- The root `.gitignore` is absent, and `app/schemas/` has no exported Room schema JSON yet (only `.gitkeep`).
+
+See [PROJECT-AUDIT-2026-10-24.md](progress/PROJECT-AUDIT-2026-10-24.md) for source-level phase findings, build readiness risks, and security review.
 
 See the [implementation plan](../JOBMATE_IMPLEMENTATION_PLAN.md) and individual reports in [`progress/`](progress/) for step-by-step details.
