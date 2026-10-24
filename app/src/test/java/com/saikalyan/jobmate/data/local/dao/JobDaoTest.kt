@@ -38,9 +38,9 @@ class JobDaoTest {
 
     @Test
     fun observesEmptyAndThenSavedJobs() = runBlocking {
-        assertTrue(dao.observeJobs().first().isEmpty())
+        assertTrue(dao.observeJobs(null).first().isEmpty())
         dao.upsert(job("job-1", "Android Engineer", "Northwind"))
-        assertEquals(listOf("job-1"), dao.observeJobs().first().map(JobEntity::id))
+        assertEquals(listOf("job-1"), dao.observeJobs(null).first().map(JobEntity::id))
     }
 
     @Test
@@ -70,7 +70,7 @@ class JobDaoTest {
         assertEquals("CLOSED", dao.findById("job-1")?.status)
         assertEquals(1, dao.deleteById("job-1"))
         assertEquals(0, dao.deleteById("job-1"))
-        assertFalse(dao.observeJobs().first().any())
+        assertFalse(dao.observeJobs(null).first().any())
     }
 
     private fun job(
