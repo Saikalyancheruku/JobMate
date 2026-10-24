@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.Image
@@ -18,6 +19,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.os.Looper
 import android.util.DisplayMetrics
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -40,6 +42,9 @@ class CaptureForegroundService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, _ -> controller.failed("On-device text recognition failed.") })
     private val captureRequested = AtomicBoolean(false)
+    private val captureInProgress = AtomicBoolean(false)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingCaptureStart: Runnable? = null
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
@@ -55,11 +60,7 @@ class CaptureForegroundService : Service() {
                 stopSelf(startId)
             }
             ACTION_CAPTURE -> {
-                if (projection == null) controller.failed("Capture session is not active.")
-                else {
-                    captureRequested.set(true)
-                    controller.waitingForFrame()
-                }
+                requestCaptureAfterNotificationCloses()
             }
             ACTION_START -> startProjection(intent, startId)
             else -> {
@@ -139,7 +140,13 @@ class CaptureForegroundService : Service() {
             image.close()
             return
         }
-        scope.launch { processAndRelease(image) }
+        scope.launch {
+            try {
+                processAndRelease(image)
+            } finally {
+                captureInProgress.set(false)
+            }
+        }
     }
 
     private suspend fun processAndRelease(image: Image) {
@@ -154,6 +161,13 @@ class CaptureForegroundService : Service() {
 
     private fun buildNotification(): Notification {
         val stopIntent = Intent(this, CaptureForegroundService::class.java).setAction(ACTION_STOP)
+        val captureIntent = Intent(this, CaptureForegroundService::class.java).setAction(ACTION_CAPTURE)
+        val capturePendingIntent = PendingIntent.getService(
+            this,
+            CAPTURE_REQUEST_CODE,
+            captureIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val stopPendingIntent = PendingIntent.getService(
             this,
             STOP_REQUEST_CODE,
@@ -173,11 +187,37 @@ class CaptureForegroundService : Service() {
             Notification.Builder(this)
         }.setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentTitle("JobMate screen capture is active")
-            .setContentText("Capture only when you tap Capture this section.")
+            .setContentText("While viewing a job, tap Capture screen here.")
             .setContentIntent(openPendingIntent)
             .setOngoing(true)
-            .addAction(Notification.Action.Builder(android.R.drawable.ic_media_pause, "Stop", stopPendingIntent).build())
+            .setOnlyAlertOnce(true)
+            .addAction(Notification.Action.Builder(Icon.createWithResource(this, android.R.drawable.ic_menu_camera), "Capture screen", capturePendingIntent).build())
+            .addAction(Notification.Action.Builder(Icon.createWithResource(this, android.R.drawable.ic_media_pause), "Stop", stopPendingIntent).build())
             .build()
+    }
+
+    /** Wait for Android to close the notification shade before requesting the next projected frame. */
+    private fun requestCaptureAfterNotificationCloses() {
+        if (projection == null) {
+            controller.failed("Capture session is not active. Start screen capture in JobMate first.")
+            return
+        }
+        if (!captureInProgress.compareAndSet(false, true)) {
+            controller.failed("A screen section is already being read. Wait for it to finish before capturing again.")
+            return
+        }
+        controller.waitingForFrame()
+        val request = Runnable {
+            pendingCaptureStart = null
+            if (projection == null) {
+                captureInProgress.set(false)
+                controller.failed("The screen-capture session has ended. Start a new session in JobMate.")
+            } else {
+                captureRequested.set(true)
+            }
+        }
+        pendingCaptureStart = request
+        mainHandler.postDelayed(request, NOTIFICATION_DISMISS_DELAY_MS)
     }
 
     private fun createNotificationChannel() {
@@ -209,7 +249,10 @@ class CaptureForegroundService : Service() {
     }
 
     private fun releaseCaptureResources() {
+        pendingCaptureStart?.let(mainHandler::removeCallbacks)
+        pendingCaptureStart = null
         captureRequested.set(false)
+        captureInProgress.set(false)
         runCatching { virtualDisplay?.release() }
         virtualDisplay = null
         runCatching { imageReader?.setOnImageAvailableListener(null, null) }
@@ -231,6 +274,8 @@ class CaptureForegroundService : Service() {
         private const val NOTIFICATION_ID = 8201
         private const val STOP_REQUEST_CODE = 8202
         private const val OPEN_REQUEST_CODE = 8203
+        private const val CAPTURE_REQUEST_CODE = 8204
+        private const val NOTIFICATION_DISMISS_DELAY_MS = 500L
         const val ACTION_START = "com.saikalyan.jobmate.capture.START"
         const val ACTION_CAPTURE = "com.saikalyan.jobmate.capture.CAPTURE"
         const val ACTION_STOP = "com.saikalyan.jobmate.capture.STOP"
