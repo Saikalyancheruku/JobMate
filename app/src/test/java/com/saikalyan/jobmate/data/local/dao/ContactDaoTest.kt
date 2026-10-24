@@ -17,7 +17,7 @@ import org.robolectric.annotation.Config
 import java.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [35])
 class ContactDaoTest {
     private lateinit var database: JobMateDatabase
     private val dao get() = database.contactDao()

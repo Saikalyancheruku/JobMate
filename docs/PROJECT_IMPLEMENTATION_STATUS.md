@@ -21,7 +21,7 @@ The audit on 2026-10-24 found that this workspace currently has a Git checkout o
 | 7 — Job capture | Consent-based MediaProjection, foreground service, on-device OCR, parsing, review/save, and shared-text route source are present. | Compilation, tests, and Android device/API behavior have not been verified. |
 | 8 — Follow-ups and settings | WorkManager reminders, theme, CSV export, and local data deletion source are present. | Compilation, tests, notification behavior, export, and deletion have not been verified. |
 | 9 — Google Sheets | Google authorization, generated `JobMate Sync` sheet (`Jobs` and `Contacts` tabs), sync queue/worker, and conflict review source are present. | Google Cloud setup, compilation, tests, and real account/sync/device behavior remain pending. |
-| 10 — Delivery | The delivery workflow exists; main-source Kotlin compilation passed in the latest supplied run, and a missing test constructor dependency was fixed. | Not complete: that run failed at `:app:compileDebugUnitTestKotlin`; rerun CI to verify the fix, then complete remaining tests/lint/APK/device checks. |
+| 10 — Delivery | Main and test Kotlin compilation succeeded in the latest supplied run; the three failing Robolectric DAO tests were changed to API 35 for JDK 17 compatibility. | Not complete: `:app:testDebugUnitTest` failed in 3 DAO test class setups. The API 35 adjustment needs CI confirmation; no successful lint/APK/device verification. |
 
 Tests were explicitly deferred for the newer feature phases. Seven JVM test files currently exist for earlier jobs/database behavior; their presence does not mean they pass. No test run is recorded as successful.
 
@@ -51,7 +51,7 @@ Tests were explicitly deferred for the newer feature phases. Seven JVM test file
 
 - The Phase 0 build attempt failed before the requested Gradle tasks because `ANDROID_HOME` / `sdk.dir` was not configured.
 - On 2026-10-24, `:app:tasks` configured successfully after the SDK change; `:app:checkDebugAarMetadata` could not evaluate metadata because the local Android SDK location is still missing.
-- GitHub Actions has now been triggered. The supplied run passed `:app:compileDebugKotlin`, then `:app:compileDebugUnitTestKotlin` reported a missing `FollowUpScheduler` argument in `JobWorkflowViewModelTest` (see [PHASE-10-STEP-34](progress/PHASE-10-STEP-34.md)); a test-source correction is pending CI confirmation. Earlier diagnostics and corrections are recorded in [Step 32](progress/PHASE-10-STEP-32.md) and [Step 33](progress/PHASE-10-STEP-33.md). The local compile attempt cannot reach Kotlin compilation because the Android SDK is missing.
+- The latest supplied Actions run passed main and unit-test Kotlin compilation, then failed during `:app:testDebugUnitTest`: 3 Robolectric DAO test classes requested API 36, which requires Java 21; CI is configured for JDK 17. They now request API 35 per [PHASE-10-STEP-35](progress/PHASE-10-STEP-35.md). The run shows lint analysis started but no successful `lintDebug` or `assembleDebug` result. Earlier compile fixes are in [Steps 32–34](progress/PHASE-10-STEP-32.md). No CI rerun has confirmed the latest change.
 - No successful full compilation, lint, test run, device check, or APK output is recorded.
 - The audit made no Git mutations; the checkout already had `.git` and an `origin` remote.
 - The root `.gitignore` is absent, and `app/schemas/` has no exported Room schema JSON yet (only `.gitkeep`).

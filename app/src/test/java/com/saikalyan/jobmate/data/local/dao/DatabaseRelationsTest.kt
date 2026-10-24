@@ -25,7 +25,7 @@ import org.robolectric.annotation.Config
 import java.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [35])
 class DatabaseRelationsTest {
     private lateinit var database: JobMateDatabase
     private val now = Instant.parse("2026-01-01T00:00:00Z")
