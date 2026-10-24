@@ -15,7 +15,6 @@ import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.Image
 import android.media.ImageReader
-import android.graphics.ImageFormat
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -31,6 +30,7 @@ import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.provider.Settings
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.saikalyan.jobmate.MainActivity
@@ -130,7 +130,7 @@ class CaptureForegroundService : Service() {
         val metrics = DisplayMetrics()
         val display = (getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay
         display.getRealMetrics(metrics)
-        val reader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, ImageFormat.YUV_420_888, 2)
+        val reader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
         val thread = HandlerThread("JobMateCaptureFrame").apply { start() }
         val handler = Handler(thread.looper)
         imageReader = reader
@@ -170,8 +170,8 @@ class CaptureForegroundService : Service() {
             controller.publish(recognizer.recognize(image))
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
-            controller.failed("On-device recognition could not read this screen section.")
+        } catch (failure: Exception) {
+            controller.failed("OCR failed (${failure.javaClass.simpleName}). Try again or use the in-app capture button.")
         }
     }
 
@@ -328,7 +328,12 @@ class CaptureForegroundService : Service() {
             CaptureSessionState.WaitingForFrame -> { bubble.text = "…"; bubble.visibility = View.INVISIBLE }
             CaptureSessionState.Saving -> { bubble.text = "SAVE"; bubble.visibility = View.VISIBLE }
             is CaptureSessionState.Saved -> { bubble.text = "✓"; bubble.visibility = View.VISIBLE }
-            is CaptureSessionState.Error -> { bubble.text = "!"; bubble.visibility = View.VISIBLE }
+            is CaptureSessionState.Error -> {
+                bubble.text = "!"
+                bubble.contentDescription = state.message
+                bubble.visibility = View.VISIBLE
+                Toast.makeText(this, state.message, Toast.LENGTH_LONG).show()
+            }
         }
     }
 
