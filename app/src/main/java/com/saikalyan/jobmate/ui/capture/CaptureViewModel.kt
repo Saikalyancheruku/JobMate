@@ -135,10 +135,12 @@ class CaptureViewModel @Inject constructor(
         when (val existing = jobs.findByFingerprint(fingerprint)) {
             is RepositoryResult.Success -> if (existing.value != null) {
                 _state.value = _state.value.copy(saving = false, duplicate = true, message = "This job is already saved. Capture the next listing when ready.")
+                controller.saved(title, company)
                 return
             }
             is RepositoryResult.Failure -> {
                 _state.value = _state.value.copy(saving = false, message = "Could not check whether this captured job already exists.")
+                controller.failed("Could not check whether this captured job already exists.")
                 return
             }
         }
@@ -169,8 +171,12 @@ class CaptureViewModel @Inject constructor(
                     savedJobsInSession = latest.savedJobsInSession + 1,
                     message = "Job saved automatically. You can review or edit it later from Jobs.",
                 )
+                controller.saved(title, company)
             }
-            is RepositoryResult.Failure -> _state.value = _state.value.copy(saving = false, message = "Could not save this capture. Open JobMate to try capturing it again.")
+            is RepositoryResult.Failure -> {
+                _state.value = _state.value.copy(saving = false, message = "Could not save this capture. Open JobMate to try capturing it again.")
+                controller.failed("Could not save this capture. Try capturing it again.")
+            }
         }
     }
 

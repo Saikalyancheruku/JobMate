@@ -7,6 +7,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Icon
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -21,6 +24,13 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.util.DisplayMetrics
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
+import android.view.WindowManager
+import android.provider.Settings
+import android.widget.TextView
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.saikalyan.jobmate.MainActivity
@@ -45,11 +55,14 @@ class CaptureForegroundService : Service() {
     private val captureInProgress = AtomicBoolean(false)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingCaptureStart: Runnable? = null
+    private var pendingCaptureTimeout: Runnable? = null
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private var workerThread: HandlerThread? = null
     private var workerHandler: Handler? = null
+    private var windowManager: WindowManager? = null
+    private var captureBubble: TextView? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -102,10 +115,12 @@ class CaptureForegroundService : Service() {
             projection = activeProjection
             activeProjection.registerCallback(projectionCallback, Handler(mainLooper))
             createCaptureSurface()
+            createCaptureBubble()
+            observeCaptureStatus()
             controller.started()
         } catch (_: Exception) {
-            controller.failed("Could not start the screen-capture session. Try granting consent again.")
             stopProjection()
+            controller.failed("Could not start capture. Check screen-sharing and Display over other apps permissions, then try again.")
             stopSelf(startId)
         }
     }
@@ -140,12 +155,13 @@ class CaptureForegroundService : Service() {
             image.close()
             return
         }
+        mainHandler.post {
+            pendingCaptureTimeout?.let(mainHandler::removeCallbacks)
+            pendingCaptureTimeout = null
+            captureBubble?.apply { text = "OCR"; visibility = View.VISIBLE }
+        }
         scope.launch {
-            try {
-                processAndRelease(image)
-            } finally {
-                captureInProgress.set(false)
-            }
+            processAndRelease(image)
         }
     }
 
@@ -161,13 +177,6 @@ class CaptureForegroundService : Service() {
 
     private fun buildNotification(): Notification {
         val stopIntent = Intent(this, CaptureForegroundService::class.java).setAction(ACTION_STOP)
-        val captureIntent = Intent(this, CaptureForegroundService::class.java).setAction(ACTION_CAPTURE)
-        val capturePendingIntent = PendingIntent.getService(
-            this,
-            CAPTURE_REQUEST_CODE,
-            captureIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
         val stopPendingIntent = PendingIntent.getService(
             this,
             STOP_REQUEST_CODE,
@@ -187,11 +196,10 @@ class CaptureForegroundService : Service() {
             Notification.Builder(this)
         }.setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentTitle("JobMate screen capture is active")
-            .setContentText("While viewing a job, tap Capture screen here.")
+            .setContentText("Use the floating CAP bubble to capture a job screen.")
             .setContentIntent(openPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .addAction(Notification.Action.Builder(Icon.createWithResource(this, android.R.drawable.ic_menu_camera), "Capture screen", capturePendingIntent).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, android.R.drawable.ic_media_pause), "Stop", stopPendingIntent).build())
             .build()
     }
@@ -203,9 +211,9 @@ class CaptureForegroundService : Service() {
             return
         }
         if (!captureInProgress.compareAndSet(false, true)) {
-            controller.failed("A screen section is already being read. Wait for it to finish before capturing again.")
             return
         }
+        captureBubble?.visibility = View.INVISIBLE
         controller.waitingForFrame()
         val request = Runnable {
             pendingCaptureStart = null
@@ -214,10 +222,121 @@ class CaptureForegroundService : Service() {
                 controller.failed("The screen-capture session has ended. Start a new session in JobMate.")
             } else {
                 captureRequested.set(true)
+                val timeout = Runnable {
+                    pendingCaptureTimeout = null
+                    if (captureRequested.compareAndSet(true, false)) {
+                        captureInProgress.set(false)
+                        controller.failed("Could not capture this screen. Try tapping the bubble again.")
+                    }
+                }
+                pendingCaptureTimeout = timeout
+                mainHandler.postDelayed(timeout, CAPTURE_FRAME_TIMEOUT_MS)
             }
         }
         pendingCaptureStart = request
         mainHandler.postDelayed(request, NOTIFICATION_DISMISS_DELAY_MS)
+    }
+
+    private fun createCaptureBubble() {
+        check(Settings.canDrawOverlays(this)) { "JobMate needs Display over other apps access for the capture bubble." }
+        val manager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val density = resources.displayMetrics.density
+        val size = (56 * density).toInt()
+        val params = WindowManager.LayoutParams(
+            size,
+            size,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = (16 * density).toInt()
+            y = (220 * density).toInt()
+        }
+        val bubble = TextView(this).apply {
+            text = "CAP"
+            setTextColor(Color.WHITE)
+            textSize = 12f
+            gravity = Gravity.CENTER
+            contentDescription = "Capture and save this job screen"
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.rgb(25, 103, 210))
+                setStroke((2 * density).toInt(), Color.WHITE)
+            }
+            elevation = 8 * density
+        }
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        bubble.setOnTouchListener(object : View.OnTouchListener {
+            private var downRawX = 0f
+            private var downRawY = 0f
+            private var startX = 0
+            private var startY = 0
+            private var dragged = false
+
+            override fun onTouch(view: View, event: MotionEvent): Boolean {
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downRawX = event.rawX
+                        downRawY = event.rawY
+                        startX = params.x
+                        startY = params.y
+                        dragged = false
+                        return true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = event.rawX - downRawX
+                        val dy = event.rawY - downRawY
+                        if (kotlin.math.abs(dx) > touchSlop || kotlin.math.abs(dy) > touchSlop) dragged = true
+                        if (dragged) {
+                            params.x = startX + dx.toInt()
+                            params.y = startY + dy.toInt()
+                            runCatching { manager.updateViewLayout(bubble, params) }
+                        }
+                        return true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        if (!dragged) requestCaptureAfterNotificationCloses()
+                        return true
+                    }
+                    MotionEvent.ACTION_CANCEL -> return true
+                }
+                return false
+            }
+        })
+        manager.addView(bubble, params)
+        windowManager = manager
+        captureBubble = bubble
+    }
+
+    private fun observeCaptureStatus() {
+        scope.launch {
+            controller.state.collect { state ->
+                if (state is CaptureSessionState.Saved || state is CaptureSessionState.Error) {
+                    captureInProgress.set(false)
+                }
+                mainHandler.post { updateCaptureBubble(state) }
+            }
+        }
+    }
+
+    private fun updateCaptureBubble(state: CaptureSessionState) {
+        val bubble = captureBubble ?: return
+        when (state) {
+            CaptureSessionState.Idle -> bubble.text = "CAP"
+            CaptureSessionState.Capturing -> { bubble.text = "CAP"; bubble.visibility = View.VISIBLE }
+            CaptureSessionState.WaitingForFrame -> { bubble.text = "…"; bubble.visibility = View.INVISIBLE }
+            CaptureSessionState.Saving -> { bubble.text = "SAVE"; bubble.visibility = View.VISIBLE }
+            is CaptureSessionState.Saved -> { bubble.text = "✓"; bubble.visibility = View.VISIBLE }
+            is CaptureSessionState.Error -> { bubble.text = "!"; bubble.visibility = View.VISIBLE }
+        }
+    }
+
+    private fun removeCaptureBubble() {
+        val bubble = captureBubble ?: return
+        runCatching { windowManager?.removeView(bubble) }
+        captureBubble = null
+        windowManager = null
     }
 
     private fun createNotificationChannel() {
@@ -251,8 +370,11 @@ class CaptureForegroundService : Service() {
     private fun releaseCaptureResources() {
         pendingCaptureStart?.let(mainHandler::removeCallbacks)
         pendingCaptureStart = null
+        pendingCaptureTimeout?.let(mainHandler::removeCallbacks)
+        pendingCaptureTimeout = null
         captureRequested.set(false)
         captureInProgress.set(false)
+        removeCaptureBubble()
         runCatching { virtualDisplay?.release() }
         virtualDisplay = null
         runCatching { imageReader?.setOnImageAvailableListener(null, null) }
@@ -274,8 +396,8 @@ class CaptureForegroundService : Service() {
         private const val NOTIFICATION_ID = 8201
         private const val STOP_REQUEST_CODE = 8202
         private const val OPEN_REQUEST_CODE = 8203
-        private const val CAPTURE_REQUEST_CODE = 8204
         private const val NOTIFICATION_DISMISS_DELAY_MS = 500L
+        private const val CAPTURE_FRAME_TIMEOUT_MS = 5000L
         const val ACTION_START = "com.saikalyan.jobmate.capture.START"
         const val ACTION_CAPTURE = "com.saikalyan.jobmate.capture.CAPTURE"
         const val ACTION_STOP = "com.saikalyan.jobmate.capture.STOP"

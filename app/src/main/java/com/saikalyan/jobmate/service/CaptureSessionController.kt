@@ -11,6 +11,8 @@ sealed interface CaptureSessionState {
     data object Idle : CaptureSessionState
     data object Capturing : CaptureSessionState
     data object WaitingForFrame : CaptureSessionState
+    data object Saving : CaptureSessionState
+    data class Saved(val title: String, val company: String) : CaptureSessionState
     data class Error(val message: String) : CaptureSessionState
 }
 
@@ -28,10 +30,13 @@ class CaptureSessionController @Inject constructor() {
     fun publish(text: String) {
         if (text.isBlank()) _state.value = CaptureSessionState.Error("No readable text was found in this screen section.")
         else {
-            _sections.tryEmit(CapturedTextSection(text))
-            _state.value = CaptureSessionState.Capturing
+            _state.value = CaptureSessionState.Saving
+            if (!_sections.tryEmit(CapturedTextSection(text))) {
+                _state.value = CaptureSessionState.Error("Capture queue is busy. Wait briefly, then try again.")
+            }
         }
     }
+    fun saved(title: String, company: String) { _state.value = CaptureSessionState.Saved(title, company) }
     fun failed(message: String) { _state.value = CaptureSessionState.Error(message) }
     fun stopped() { _state.value = CaptureSessionState.Idle }
 }
