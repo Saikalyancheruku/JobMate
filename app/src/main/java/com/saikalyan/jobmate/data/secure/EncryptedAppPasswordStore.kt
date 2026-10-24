@@ -41,7 +41,7 @@ class EncryptedAppPasswordStore @Inject constructor(
 
     override val configuredEmail: Flow<String?> = dataStore.data.map { it[EMAIL_KEY] }
 
-    override suspend fun save(email: String, appPassword: String) = withContext(ioDispatcher) {
+    override suspend fun save(email: String, appPassword: String): Unit = withContext(ioDispatcher) {
         mutex.withLock {
             val normalizedEmail = email.trim().lowercase(Locale.ROOT)
             val normalizedPassword = appPassword.filterNot(Char::isWhitespace)

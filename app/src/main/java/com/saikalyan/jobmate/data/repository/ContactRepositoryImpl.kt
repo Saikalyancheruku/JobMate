@@ -49,7 +49,7 @@ class ContactRepositoryImpl @Inject constructor(
         return databaseResult {
             val entity = contactDao.findByNormalizedEmail(email)
             if (entity == null) RepositoryResult.Success(null)
-            else entity.toDomain()?.let(RepositoryResult::Success)
+            else entity.toDomain()?.let { RepositoryResult.Success<Contact?>(it) }
                 ?: RepositoryResult.Failure(RepositoryError.CorruptData("contact.normalizedEmail"))
         }
     }
@@ -95,7 +95,7 @@ class ContactRepositoryImpl @Inject constructor(
         val email = normalizeEmail(contact.normalizedEmail)
         if (contact.id.isBlank() || name.isBlank() || email.isBlank()) return null
         val domain = contact.domain?.trim()?.lowercase(Locale.ROOT)?.ifEmpty { null }
-            ?: email.substringAfter('@', missingDelimiterValue = '').ifEmpty { null }
+            ?: email.substringAfter('@', missingDelimiterValue = "").ifEmpty { null }
         return contact.copy(
             fullName = name,
             normalizedEmail = email,

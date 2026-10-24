@@ -23,9 +23,10 @@ data class SheetsConnection(val enabled: Boolean, val spreadsheetId: String?, va
 @Singleton
 class SheetsSyncPreferences @Inject constructor(@ApplicationContext context: Context) {
     private val mutex = Mutex()
-    private val store = PreferenceDataStoreFactory.create(CoroutineScope(SupervisorJob() + Dispatchers.IO)) {
-        context.preferencesDataStoreFile("sheets_sync_preferences")
-    }
+    private val store = PreferenceDataStoreFactory.create(
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        produceFile = { context.preferencesDataStoreFile("sheets_sync_preferences") },
+    )
     val connection: Flow<SheetsConnection> = store.data.map { p ->
         SheetsConnection(p[ENABLED] ?: false, p[SHEET_ID], p[SHEET_URL], p[AUTH_REQUIRED] ?: false, p[LAST_ERROR])
     }

@@ -26,7 +26,11 @@ class ResumeRepositoryImpl @Inject constructor(
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : ResumeRepository {
     override fun observeResumes(): Flow<RepositoryResult<List<Resume>>> = dao.observeAll()
-        .map { rows -> RepositoryResult.Success(rows.map(ResumeEntity::toDomain)) }
+        .map { rows ->
+            val result: RepositoryResult<List<Resume>> =
+                RepositoryResult.Success(rows.map { it.toDomain() })
+            result
+        }
         .catch { cause ->
             if (cause is CancellationException) throw cause
             emit(RepositoryResult.Failure(RepositoryError.Storage))

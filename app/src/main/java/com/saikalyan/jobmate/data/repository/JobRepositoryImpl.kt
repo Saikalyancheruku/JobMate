@@ -41,7 +41,7 @@ class JobRepositoryImpl @Inject constructor(
                 if (entity == null) {
                     RepositoryResult.Success(null)
                 } else {
-                    entity.toDomain()?.let(RepositoryResult::Success)
+                    entity.toDomain()?.let { RepositoryResult.Success<Job?>(it) }
                         ?: RepositoryResult.Failure(RepositoryError.CorruptData("job.status"))
                 }
             }
@@ -106,7 +106,7 @@ class JobRepositoryImpl @Inject constructor(
         return databaseResult {
             val entity = jobDao.findByFingerprint(fingerprint)
             if (entity == null) RepositoryResult.Success(null)
-            else entity.toDomain()?.let(RepositoryResult::Success)
+            else entity.toDomain()?.let { RepositoryResult.Success<Job?>(it) }
                 ?: RepositoryResult.Failure(RepositoryError.CorruptData("job.status"))
         }
     }

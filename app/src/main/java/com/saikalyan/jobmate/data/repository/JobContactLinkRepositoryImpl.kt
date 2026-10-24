@@ -21,7 +21,10 @@ class JobContactLinkRepositoryImpl @Inject constructor(
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : JobContactLinkRepository {
     override fun observeForContact(contactId: String): Flow<RepositoryResult<Set<String>>> =
-        dao.observeForContact(contactId).map { links -> RepositoryResult.Success(links.map { it.jobId }.toSet()) }
+        dao.observeForContact(contactId).map { links ->
+            val result: RepositoryResult<Set<String>> = RepositoryResult.Success(links.map { it.jobId }.toSet())
+            result
+        }
             .catch { cause ->
                 if (cause is CancellationException) throw cause
                 emit(RepositoryResult.Failure(RepositoryError.Storage))

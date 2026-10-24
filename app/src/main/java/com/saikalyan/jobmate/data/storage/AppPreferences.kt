@@ -16,9 +16,10 @@ import javax.inject.Singleton
 
 @Singleton
 class AppPreferences @Inject constructor(@ApplicationContext context: Context) {
-    private val store = PreferenceDataStoreFactory.create(CoroutineScope(SupervisorJob() + Dispatchers.IO)) {
-        context.preferencesDataStoreFile("app_preferences")
-    }
+    private val store = PreferenceDataStoreFactory.create(
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        produceFile = { context.preferencesDataStoreFile("app_preferences") },
+    )
     val darkTheme: Flow<Boolean> = store.data.map { it[DARK_THEME] ?: false }
     suspend fun setDarkTheme(enabled: Boolean) { store.edit { it[DARK_THEME] = enabled } }
     private companion object { val DARK_THEME = booleanPreferencesKey("dark_theme") }

@@ -20,7 +20,11 @@ class OutreachDraftRepositoryImpl @Inject constructor(
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : OutreachDraftRepository {
     override fun observeDrafts(): Flow<RepositoryResult<List<OutreachDraft>>> = dao.observeAll()
-        .map { rows -> RepositoryResult.Success(rows.map(OutreachEntity::toDomain)) }
+        .map { rows ->
+            val result: RepositoryResult<List<OutreachDraft>> =
+                RepositoryResult.Success(rows.map { it.toDomain() })
+            result
+        }
         .catch { cause ->
             if (cause is CancellationException) throw cause
             emit(RepositoryResult.Failure(RepositoryError.Storage))

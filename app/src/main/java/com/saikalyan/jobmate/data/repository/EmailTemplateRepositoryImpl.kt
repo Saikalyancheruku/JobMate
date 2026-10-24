@@ -24,7 +24,9 @@ class EmailTemplateRepositoryImpl @Inject constructor(
     override fun observeTemplates(): Flow<RepositoryResult<List<EmailTemplate>>> = dao.observeAll()
         .map { entities ->
             seedBuiltIns()
-            RepositoryResult.Success(entities.map(EmailTemplateEntity::toDomain))
+            val result: RepositoryResult<List<EmailTemplate>> =
+                RepositoryResult.Success(entities.map { it.toDomain() })
+            result
         }
         .catch { cause ->
             if (cause is CancellationException) throw cause
