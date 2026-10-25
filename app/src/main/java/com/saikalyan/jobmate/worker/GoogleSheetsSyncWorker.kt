@@ -63,6 +63,11 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
             val remoteJobs = api.readRows(token, spreadsheetId, GoogleSheetsClient.JOBS_TAB).associateBy { it.id }.toMutableMap()
             val remoteContacts = api.readRows(token, spreadsheetId, GoogleSheetsClient.CONTACTS_TAB).associateBy { it.id }.toMutableMap()
             val queue = db.syncQueueDao()
+            // Pull remote rows first. Local rows with newer timestamps are queued for upload
+            // after this merge; sheet-only rows are imported into Room.
+            mergeRemoteJobs(remoteJobs.values, db, queue)
+            mergeRemoteContacts(remoteContacts.values, db, queue)
+            queueLocalChanges(db, remoteJobs, remoteContacts, queue, entry.clock())
             for (item in queue.getPending()) {
                 try {
                     when (item.entityType) {
@@ -81,8 +86,6 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
                     return@withContext Result.retry()
                 }
             }
-            mergeRemoteJobs(remoteJobs.values, db, queue)
-            mergeRemoteContacts(remoteContacts.values, db, queue)
             Result.success()
         } catch (failure: SheetsApiException) {
             if (failure.statusCode == 401) { prefs.requireAuthorization(); Result.success() }
@@ -120,7 +123,7 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
         }
         val values = local.toSheetRow()
         val current = remote[item.entityId]
-        if (!forceLocal && current != null && newer(current.updatedAt, local.updatedAt) && current.values != values) {
+        if (!forceLocal && current != null && remoteChangedAtOrAfterLocal(current, local.updatedAt, values, GoogleSheetsClient.JOB_HEADERS.size)) {
             conflicts.upsert(SyncConflictEntity(item.id, "JOB", item.entityId, JSONObject().put("values", JSONArray(values)).toString(),
                 JSONObject().put("values", JSONArray(current.values)).toString(), clock.instant(), null))
             queue.updateState(item.id, SyncQueueManager.STATE_CONFLICT, item.attemptCount, "REMOTE_CHANGED", parseInstant(current.updatedAt))
@@ -158,7 +161,7 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
         }
         val values = local.toSheetRow()
         val current = remote[item.entityId]
-        if (!forceLocal && current != null && newer(current.updatedAt, local.updatedAt) && current.values != values) {
+        if (!forceLocal && current != null && remoteChangedAtOrAfterLocal(current, local.updatedAt, values, GoogleSheetsClient.CONTACT_HEADERS.size)) {
             conflicts.upsert(SyncConflictEntity(item.id, "CONTACT", item.entityId, JSONObject().put("values", JSONArray(values)).toString(),
                 JSONObject().put("values", JSONArray(current.values)).toString(), clock.instant(), null))
             queue.updateState(item.id, SyncQueueManager.STATE_CONFLICT, item.attemptCount, "REMOTE_CHANGED", parseInstant(current.updatedAt))
@@ -173,12 +176,18 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
         for (row in rows) {
             if (queue.findById("JOB:${row.id}")?.state in setOf(SyncQueueManager.STATE_PENDING, SyncQueueManager.STATE_CONFLICT)) continue
             val local = db.jobDao().findById(row.id)
-            if (row.deleted) { if (local != null) db.jobDao().deleteById(row.id); continue }
+            if (row.deleted) {
+                val remoteTime = parseInstant(row.updatedAt)
+                if (local != null && remoteTime != null && !local.updatedAt.isAfter(remoteTime)) db.jobDao().deleteById(row.id)
+                continue
+            }
             val remote = row.toJobEntity() ?: continue
             if (local == null) db.jobDao().upsert(remote)
-            else if (remote.updatedAt.isAfter(local.updatedAt)) {
+            else if (!local.updatedAt.isAfter(remote.updatedAt)) {
                 // Raw OCR text is deliberately local-only and must survive a sheet pull.
-                db.jobDao().upsert(remote.copy(rawCapturedText = local.rawCapturedText, capturedAt = remote.capturedAt ?: local.capturedAt, aiCorrected = local.aiCorrected))
+                if (remote.updatedAt.isAfter(local.updatedAt) || remote.toSheetComparable() != local.toSheetComparable()) {
+                    db.jobDao().upsert(remote.copy(rawCapturedText = local.rawCapturedText, capturedAt = remote.capturedAt ?: local.capturedAt, aiCorrected = local.aiCorrected))
+                }
             }
         }
     }
@@ -187,10 +196,54 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
         for (row in rows) {
             if (queue.findById("CONTACT:${row.id}")?.state in setOf(SyncQueueManager.STATE_PENDING, SyncQueueManager.STATE_CONFLICT)) continue
             val local = db.contactDao().findById(row.id)
-            if (row.deleted) { if (local != null) db.contactDao().deleteById(row.id); continue }
+            if (row.deleted) {
+                val remoteTime = parseInstant(row.updatedAt)
+                if (local != null && remoteTime != null && !local.updatedAt.isAfter(remoteTime)) db.contactDao().deleteById(row.id)
+                continue
+            }
             val remote = row.toContactEntity() ?: continue
-            if (local == null || remote.updatedAt.isAfter(local.updatedAt)) db.contactDao().upsert(remote)
+            if (local == null || !local.updatedAt.isAfter(remote.updatedAt)) {
+                if (local == null || remote != local) db.contactDao().upsert(remote)
+            }
         }
+    }
+
+    /** Queue only local rows absent from the Sheet or newer than their remote counterpart. */
+    private suspend fun queueLocalChanges(
+        db: JobMateDatabase,
+        remoteJobs: Map<String, RemoteSheetRow>,
+        remoteContacts: Map<String, RemoteSheetRow>,
+        queue: com.saikalyan.jobmate.data.local.dao.SyncQueueDao,
+        clock: Clock,
+    ) {
+        for (job in db.jobDao().getAll()) {
+            val remote = remoteJobs[job.id]
+            val remoteTime = remote?.let { parseInstant(it.updatedAt) }
+            if (remote == null || (remote.deleted && (remoteTime == null || job.updatedAt.isAfter(remoteTime))) ||
+                (!remote.deleted && remoteTime != null && job.updatedAt.isAfter(remoteTime))) {
+                enqueueIfNotPending(queue, "JOB", job.id, clock)
+            }
+        }
+        for (contact in db.contactDao().getAll()) {
+            val remote = remoteContacts[contact.id]
+            val remoteTime = remote?.let { parseInstant(it.updatedAt) }
+            if (remote == null || (remote.deleted && (remoteTime == null || contact.updatedAt.isAfter(remoteTime))) ||
+                (!remote.deleted && remoteTime != null && contact.updatedAt.isAfter(remoteTime))) {
+                enqueueIfNotPending(queue, "CONTACT", contact.id, clock)
+            }
+        }
+    }
+
+    private suspend fun enqueueIfNotPending(
+        queue: com.saikalyan.jobmate.data.local.dao.SyncQueueDao,
+        type: String,
+        id: String,
+        clock: Clock,
+    ) {
+        val key = "$type:$id"
+        val existing = queue.findById(key)
+        if (existing != null && existing.state in setOf(SyncQueueManager.STATE_PENDING, SyncQueueManager.STATE_CONFLICT)) return
+        queue.upsert(SyncQueueEntity(key, type, id, SyncQueueManager.UPSERT, 1, clock.instant(), 0, null, SyncQueueManager.STATE_PENDING, existing?.remoteUpdatedAt))
     }
 
     private fun write(api: GoogleSheetsClient, token: String, sheetId: String, tab: String, old: RemoteSheetRow?, values: List<String>) {
@@ -204,6 +257,8 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
         createdAt.toString(), updatedAt.toString(), workArrangement.orEmpty(), JSONArray(mandatorySkills).toString(), JSONArray(preferredSkills).toString(),
         companyRating.orEmpty(), companyReviewCount.orEmpty(), applicantCount?.toString().orEmpty(), postedText.orEmpty(), vacancyCount?.toString().orEmpty(),
         experienceLevel.orEmpty(), education.orEmpty(), capturedAt?.toString().orEmpty())
+
+    private fun JobEntity.toSheetComparable() = toSheetRow().filterIndexed { index, _ -> index != 20 && index != 21 && index != 32 }
 
     private fun ContactEntity.toSheetRow() = listOf(id, "false", fullName, normalizedEmail, companyName.orEmpty(), domain.orEmpty(), designation.orEmpty(), notes.orEmpty(), createdAt.toString(), updatedAt.toString())
 
@@ -235,6 +290,13 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
     }
 
     private fun newer(remote: String, local: Instant) = parseInstant(remote)?.isAfter(local) == true
+
+    private fun remoteChangedAtOrAfterLocal(remote: RemoteSheetRow, localUpdatedAt: Instant, localValues: List<String>, columnCount: Int): Boolean {
+        val remoteUpdatedAt = parseInstant(remote.updatedAt) ?: return false
+        if (remoteUpdatedAt.isBefore(localUpdatedAt)) return false
+        fun normalized(values: List<String>) = values.take(columnCount) + List((columnCount - values.size).coerceAtLeast(0)) { "" }
+        return normalized(remote.values) != normalized(localValues)
+    }
 
     private fun stringListFromJson(value: String): List<String> =
         JSONArray(value).let { array -> (0 until array.length()).map { array.getString(it) } }

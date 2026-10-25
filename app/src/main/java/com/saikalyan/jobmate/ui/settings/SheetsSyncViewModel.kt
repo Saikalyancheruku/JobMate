@@ -46,8 +46,9 @@ class SheetsSyncViewModel @Inject constructor(
 
     fun onAuthorized() { viewModelScope.launch {
         preferences.enable()
-        database.jobDao().getAll().forEach { queueManager.enqueue("JOB", it.id, scheduleWork = false) }
-        database.contactDao().getAll().forEach { queueManager.enqueue("CONTACT", it.id, scheduleWork = false) }
+        // The worker reads and reconciles the Sheet before queuing local-only/newer rows.
+        // Enqueuing every local row here made the local database overwrite Sheet edits
+        // before the first pull could happen.
         queueManager.schedule()
         queueManager.schedulePeriodic()
         _state.value = _state.value.copy(connection = preferences.get())

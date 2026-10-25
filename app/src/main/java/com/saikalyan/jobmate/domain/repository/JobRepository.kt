@@ -18,6 +18,16 @@ interface JobRepository {
 
     suspend fun updateStatus(id: String, status: JobStatus): RepositoryResult<Unit>
 
+    suspend fun updateStatuses(ids: Set<String>, status: JobStatus): RepositoryResult<Unit> {
+        for (id in ids) {
+            when (val result = updateStatus(id, status)) {
+                is RepositoryResult.Failure -> return result
+                is RepositoryResult.Success -> Unit
+            }
+        }
+        return RepositoryResult.Success(Unit)
+    }
+
     /** Archiving maps to the persisted [JobStatus.CLOSED] state. */
     suspend fun archive(id: String): RepositoryResult<Unit>
 

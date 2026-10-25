@@ -28,6 +28,8 @@ data class JobListUiState(
     val errorMessage: String? = null,
     val actionMessage: String? = null,
     val captureFilter: CaptureFilter = CaptureFilter.ALL,
+    val selectedJobIds: Set<String> = emptySet(),
+    val selectionMode: Boolean = false,
 )
 
 enum class CaptureFilter { ALL, SCRAPED, CORRECTED }
@@ -58,6 +60,33 @@ class JobListViewModel @Inject constructor(
     fun setCaptureFilter(value: CaptureFilter) {
         captureFilter.value = value
         _uiState.value = _uiState.value.copy(captureFilter = value)
+    }
+
+    fun toggleJobSelection(jobId: String) {
+        val selected = _uiState.value.selectedJobIds.toMutableSet()
+        if (!selected.add(jobId)) selected.remove(jobId)
+        _uiState.value = _uiState.value.copy(selectedJobIds = selected, selectionMode = true)
+    }
+
+    fun beginJobSelection() {
+        _uiState.value = _uiState.value.copy(selectionMode = true)
+    }
+
+    fun clearJobSelection() {
+        _uiState.value = _uiState.value.copy(selectedJobIds = emptySet(), selectionMode = false)
+    }
+
+    fun updateSelectedJobsStatus(newStatus: JobStatus) {
+        val selected = _uiState.value.selectedJobIds
+        if (selected.isEmpty()) return
+        viewModelScope.launch {
+            val result = repository.updateStatuses(selected, newStatus)
+            _uiState.value = _uiState.value.copy(
+                selectedJobIds = if (result is RepositoryResult.Success) emptySet() else selected,
+                selectionMode = result !is RepositoryResult.Success,
+                actionMessage = if (result is RepositoryResult.Success) "${selected.size} job(s) set to ${newStatus.displayLabel}." else "Could not update the selected jobs.",
+            )
+        }
     }
 
     fun retry() { refresh.value += 1 }

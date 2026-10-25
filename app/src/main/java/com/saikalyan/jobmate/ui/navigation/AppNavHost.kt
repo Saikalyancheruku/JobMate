@@ -203,6 +203,10 @@ fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
                     onOpenJob = { id -> navController.navigate("job/$id") },
                     onArchive = viewModel::archive,
                     onCorrect = { id -> navController.navigate("job/$id?correct=true") },
+                    onToggleSelection = viewModel::toggleJobSelection,
+                    onBeginSelection = viewModel::beginJobSelection,
+                    onClearSelection = viewModel::clearJobSelection,
+                    onBulkStatusChange = viewModel::updateSelectedJobsStatus,
                 )
             }
             composable(

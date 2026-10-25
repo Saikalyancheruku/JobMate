@@ -31,7 +31,7 @@ class TemplateRenderer @Inject constructor() {
     fun availablePlaceholders(): Set<String> = ALLOWED
 
     private companion object {
-        val PLACEHOLDER = Regex("\\{\\{([^{}]*)}}")
+        val PLACEHOLDER = Regex("\\{\\{([^{}]*)\\}\\}")
         val ALLOWED = setOf("firstName", "companyName", "jobTitle", "jobUrl", "senderName")
     }
 }

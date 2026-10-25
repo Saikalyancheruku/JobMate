@@ -85,6 +85,20 @@ class JobRepositoryImpl @Inject constructor(
             else { syncQueue.enqueue("JOB", id); RepositoryResult.Success(Unit) }
         }
 
+    override suspend fun updateStatuses(ids: Set<String>, status: JobStatus): RepositoryResult<Unit> {
+        val jobIds = ids.filter(String::isNotBlank).distinct()
+        if (jobIds.isEmpty()) return RepositoryResult.Failure(RepositoryError.InvalidInput("jobIds", "empty"))
+        return databaseResult {
+            val changed = jobDao.updateStatuses(jobIds, status.storageValue, clock.instant())
+            if (changed == 0) RepositoryResult.Failure(RepositoryError.NotFound)
+            else {
+                jobIds.forEach { syncQueue.enqueue("JOB", it, scheduleWork = false) }
+                syncQueue.schedule()
+                RepositoryResult.Success(Unit)
+            }
+        }
+    }
+
     override suspend fun archive(id: String): RepositoryResult<Unit> =
         updateStatus(id, JobStatus.CLOSED)
 

@@ -58,6 +58,9 @@ interface JobDao {
     @Query("UPDATE jobs SET status = :status, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateStatus(id: String, status: String, updatedAt: java.time.Instant): Int
 
+    @Query("UPDATE jobs SET status = :status, updatedAt = :updatedAt WHERE id IN (:ids)")
+    suspend fun updateStatuses(ids: List<String>, status: String, updatedAt: java.time.Instant): Int
+
     @Delete
     suspend fun delete(job: JobEntity): Int
 
