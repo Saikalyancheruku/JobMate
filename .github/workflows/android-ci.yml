@@ -79,7 +79,11 @@ jobs:
           apk="app/build/outputs/apk/debug/app-debug.apk"
           apksigner="$ANDROID_HOME/build-tools/37.0.0/apksigner"
           certificate_file="app/build/outputs/apk/debug/app-debug-certificate.txt"
-          "$apksigner" verify --print-certs --print-certs-pem "$apk" > "$certificate_file"
+          if [[ ! -x "$apksigner" ]]; then
+            echo "apksigner was not found at $apksigner." >&2
+            exit 1
+          fi
+          "$apksigner" verify --print-certs-pem "$apk" > "$certificate_file"
           sha1="$(sed -n 's/.*certificate SHA-1 digest: //p' "$certificate_file" | head -n 1)"
           if [[ -z "$sha1" ]]; then
             echo "Could not read the APK signing certificate SHA-1." >&2
