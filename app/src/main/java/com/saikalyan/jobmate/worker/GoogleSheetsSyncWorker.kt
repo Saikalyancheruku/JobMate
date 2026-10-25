@@ -59,6 +59,7 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
                 prefs.saveSheet(created.id, created.url)
                 created.id
             }
+            api.ensureJobHeaders(token, spreadsheetId)
             val remoteJobs = api.readRows(token, spreadsheetId, GoogleSheetsClient.JOBS_TAB).associateBy { it.id }.toMutableMap()
             val remoteContacts = api.readRows(token, spreadsheetId, GoogleSheetsClient.CONTACTS_TAB).associateBy { it.id }.toMutableMap()
             val queue = db.syncQueueDao()
@@ -174,7 +175,11 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
             val local = db.jobDao().findById(row.id)
             if (row.deleted) { if (local != null) db.jobDao().deleteById(row.id); continue }
             val remote = row.toJobEntity() ?: continue
-            if (local == null || remote.updatedAt.isAfter(local.updatedAt)) db.jobDao().upsert(remote)
+            if (local == null) db.jobDao().upsert(remote)
+            else if (remote.updatedAt.isAfter(local.updatedAt)) {
+                // Raw OCR text is deliberately local-only and must survive a sheet pull.
+                db.jobDao().upsert(remote.copy(rawCapturedText = local.rawCapturedText, capturedAt = remote.capturedAt ?: local.capturedAt))
+            }
         }
     }
 
@@ -196,7 +201,9 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
     private fun JobEntity.toSheetRow() = listOf(id, "false", title, companyName, location.orEmpty(), description.orEmpty(), JSONArray(skills).toString(),
         experienceMin?.toString().orEmpty(), experienceMax?.toString().orEmpty(), salaryText.orEmpty(), employmentType.orEmpty(), postedAt?.toString().orEmpty(),
         source.orEmpty(), sourceUrl.orEmpty(), status, appliedAt?.toString().orEmpty(), followUpAt?.toString().orEmpty(), notes.orEmpty(), captureMethod.orEmpty(), fingerprint,
-        createdAt.toString(), updatedAt.toString())
+        createdAt.toString(), updatedAt.toString(), workArrangement.orEmpty(), JSONArray(mandatorySkills).toString(), JSONArray(preferredSkills).toString(),
+        companyRating.orEmpty(), companyReviewCount.orEmpty(), applicantCount?.toString().orEmpty(), postedText.orEmpty(), vacancyCount?.toString().orEmpty(),
+        experienceLevel.orEmpty(), education.orEmpty(), capturedAt?.toString().orEmpty())
 
     private fun ContactEntity.toSheetRow() = listOf(id, "false", fullName, normalizedEmail, companyName.orEmpty(), domain.orEmpty(), designation.orEmpty(), notes.orEmpty(), createdAt.toString(), updatedAt.toString())
 
@@ -210,7 +217,11 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
                 JSONArray(v[6]).let { array -> (0 until array.length()).map { array.getString(it) } },
                 v[7].toIntOrNull(), v[8].toIntOrNull(), v[9].ifBlank { null }, v[10].ifBlank { null }, parseInstant(v[11]),
                 v[12].ifBlank { null }, v[13].ifBlank { null }, validStatus, parseInstant(v[15]), parseInstant(v[16]), v[17].ifBlank { null },
-                v[18].ifBlank { null }, v[19], parseInstant(v[20]) ?: return null, parseInstant(v[21]) ?: return null)
+                v[18].ifBlank { null }, v[19], parseInstant(v[20]) ?: return null, parseInstant(v[21]) ?: return null,
+                v.getOrNull(22)?.ifBlank { null }, v.getOrNull(23)?.let(::stringListFromJson).orEmpty(), v.getOrNull(24)?.let(::stringListFromJson).orEmpty(),
+                v.getOrNull(25)?.ifBlank { null }, v.getOrNull(26)?.ifBlank { null }, v.getOrNull(27)?.toIntOrNull(), v.getOrNull(28)?.ifBlank { null },
+                v.getOrNull(29)?.toIntOrNull(), v.getOrNull(30)?.ifBlank { null }, v.getOrNull(31)?.ifBlank { null }, null,
+                v.getOrNull(32)?.let(::parseInstant))
         } catch (_: Exception) { null }
     }
 
@@ -224,6 +235,9 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
     }
 
     private fun newer(remote: String, local: Instant) = parseInstant(remote)?.isAfter(local) == true
+
+    private fun stringListFromJson(value: String): List<String> =
+        JSONArray(value).let { array -> (0 until array.length()).map { array.getString(it) } }
     private fun parseInstant(value: String?): Instant? = try { value?.takeIf(String::isNotBlank)?.let(Instant::parse) } catch (_: Exception) { null }
 
     companion object {

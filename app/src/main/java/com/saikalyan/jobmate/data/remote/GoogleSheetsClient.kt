@@ -24,7 +24,7 @@ class GoogleSheetsClient @Inject constructor() {
         val created = JSONObject(request("POST", "$SHEETS_BASE/spreadsheets", accessToken, body.toString()))
         val id = created.getString("spreadsheetId")
         val data = JSONArray()
-            .put(headerData("'$JOBS_TAB'!A1:V1", JOB_HEADERS))
+            .put(headerData("'$JOBS_TAB'!A1:AG1", JOB_HEADERS))
             .put(headerData("'$CONTACTS_TAB'!A1:J1", CONTACT_HEADERS))
         request("POST", "$SHEETS_BASE/spreadsheets/$id/values:batchUpdate", accessToken,
             JSONObject().put("valueInputOption", "RAW").put("data", data).toString())
@@ -32,7 +32,7 @@ class GoogleSheetsClient @Inject constructor() {
     }
 
     fun readRows(accessToken: String, spreadsheetId: String, tab: String): List<RemoteSheetRow> {
-        val endColumn = if (tab == CONTACTS_TAB) "J" else "V"
+        val endColumn = if (tab == CONTACTS_TAB) "J" else "AG"
         val range = URLEncoder.encode("'$tab'!A2:$endColumn", StandardCharsets.UTF_8.name())
         val response = JSONObject(request("GET", "$SHEETS_BASE/spreadsheets/$spreadsheetId/values/$range?majorDimension=ROWS", accessToken))
         val rows = response.optJSONArray("values") ?: return emptyList()
@@ -49,7 +49,7 @@ class GoogleSheetsClient @Inject constructor() {
     }
 
     fun writeRow(accessToken: String, spreadsheetId: String, tab: String, rowIndex: Int, values: List<String>) {
-        val lastColumn = if (tab == JOBS_TAB) "V" else "J"
+        val lastColumn = if (tab == JOBS_TAB) "AG" else "J"
         val range = URLEncoder.encode("'$tab'!A$rowIndex:$lastColumn$rowIndex", StandardCharsets.UTF_8.name())
         val row = JSONArray().put(JSONArray(values))
         request("PUT", "$SHEETS_BASE/spreadsheets/$spreadsheetId/values/$range?valueInputOption=RAW", accessToken,
@@ -57,10 +57,16 @@ class GoogleSheetsClient @Inject constructor() {
     }
 
     fun appendRow(accessToken: String, spreadsheetId: String, tab: String, values: List<String>) {
-        val lastColumn = if (tab == JOBS_TAB) "V" else "J"
+        val lastColumn = if (tab == JOBS_TAB) "AG" else "J"
         val range = URLEncoder.encode("'$tab'!A:$lastColumn", StandardCharsets.UTF_8.name())
         request("POST", "$SHEETS_BASE/spreadsheets/$spreadsheetId/values/$range:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS", accessToken,
             JSONObject().put("majorDimension", "ROWS").put("values", JSONArray().put(JSONArray(values))).toString())
+    }
+
+    fun ensureJobHeaders(accessToken: String, spreadsheetId: String) {
+        val range = URLEncoder.encode("'$JOBS_TAB'!A1:AG1", StandardCharsets.UTF_8.name())
+        val body = JSONObject().put("majorDimension", "ROWS").put("values", JSONArray().put(JSONArray(JOB_HEADERS)))
+        request("PUT", "$SHEETS_BASE/spreadsheets/$spreadsheetId/values/$range?valueInputOption=RAW", accessToken, body.toString())
     }
 
     private fun headerData(range: String, headers: List<String>) = JSONObject().put("range", range)
@@ -88,7 +94,7 @@ class GoogleSheetsClient @Inject constructor() {
     companion object {
         const val JOBS_TAB = "Jobs"
         const val CONTACTS_TAB = "Contacts"
-        val JOB_HEADERS = listOf("id", "deleted", "title", "companyName", "location", "description", "skillsJson", "experienceMin", "experienceMax", "salaryText", "employmentType", "postedAt", "source", "sourceUrl", "status", "appliedAt", "followUpAt", "notes", "captureMethod", "fingerprint", "createdAt", "updatedAt")
+        val JOB_HEADERS = listOf("id", "deleted", "title", "companyName", "location", "description", "skillsJson", "experienceMin", "experienceMax", "salaryText", "employmentType", "postedAt", "source", "sourceUrl", "status", "appliedAt", "followUpAt", "notes", "captureMethod", "fingerprint", "createdAt", "updatedAt", "workArrangement", "mandatorySkillsJson", "preferredSkillsJson", "companyRating", "companyReviewCount", "applicantCount", "postedText", "vacancyCount", "experienceLevel", "education", "capturedAt")
         val CONTACT_HEADERS = listOf("id", "deleted", "fullName", "email", "companyName", "domain", "designation", "notes", "createdAt", "updatedAt")
         private const val SHEETS_BASE = "https://sheets.googleapis.com/v4"
         private const val TIMEOUT_MS = 20_000

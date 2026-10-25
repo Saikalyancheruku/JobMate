@@ -45,6 +45,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import java.util.concurrent.atomic.AtomicBoolean
+import java.time.Instant
 
 @AndroidEntryPoint
 class CaptureForegroundService : Service() {
@@ -162,14 +163,15 @@ class CaptureForegroundService : Service() {
             pendingCaptureTimeout = null
             captureBubble?.apply { text = "OCR"; visibility = View.VISIBLE }
         }
+        val capturedAt = Instant.now()
         scope.launch {
-            processAndRelease(image)
+            processAndRelease(image, capturedAt)
         }
     }
 
-    private suspend fun processAndRelease(image: Image) {
+    private suspend fun processAndRelease(image: Image, capturedAt: Instant) {
         try {
-            controller.publish(recognizer.recognize(image))
+            controller.publish(recognizer.recognize(image), capturedAt)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {

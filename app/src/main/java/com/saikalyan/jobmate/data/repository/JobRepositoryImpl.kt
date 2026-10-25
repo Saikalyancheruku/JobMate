@@ -176,6 +176,18 @@ class JobRepositoryImpl @Inject constructor(
             fingerprint = fingerprint,
             createdAt = createdAt,
             updatedAt = updatedAt,
+            workArrangement = workArrangement,
+            mandatorySkills = mandatorySkills,
+            preferredSkills = preferredSkills,
+            companyRating = companyRating,
+            companyReviewCount = companyReviewCount,
+            applicantCount = applicantCount,
+            postedText = postedText,
+            vacancyCount = vacancyCount,
+            experienceLevel = experienceLevel,
+            education = education,
+            rawCapturedText = rawCapturedText,
+            capturedAt = capturedAt,
         )
     }
 
@@ -201,6 +213,18 @@ class JobRepositoryImpl @Inject constructor(
         fingerprint = fingerprint,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        workArrangement = workArrangement,
+        mandatorySkills = mandatorySkills,
+        preferredSkills = preferredSkills,
+        companyRating = companyRating,
+        companyReviewCount = companyReviewCount,
+        applicantCount = applicantCount,
+        postedText = postedText,
+        vacancyCount = vacancyCount,
+        experienceLevel = experienceLevel,
+        education = education,
+        rawCapturedText = rawCapturedText,
+        capturedAt = capturedAt,
     )
 
     private companion object {

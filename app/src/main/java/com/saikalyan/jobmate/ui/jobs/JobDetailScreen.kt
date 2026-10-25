@@ -109,14 +109,27 @@ private fun JobDetails(
         job.source?.let { DetailField("Source", it) }
         job.salaryText?.let { DetailField("Salary", it) }
         job.employmentType?.let { DetailField("Employment type", it) }
+        job.workArrangement?.let { DetailField("Work arrangement", it) }
+        job.companyRating?.let { DetailField("Company rating", it) }
+        job.companyReviewCount?.let { DetailField("Company reviews", it) }
+        job.applicantCount?.let { DetailField("Applicants", it.toString()) }
+        job.postedText?.let { DetailField("Posted", it) }
+        job.vacancyCount?.let { DetailField("Vacancies", it.toString()) }
+        job.experienceLevel?.let { DetailField("Experience level", it) }
+        job.education?.let { DetailField("Education", it) }
         job.appliedAt?.let { DetailField("Applied", it.atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()) }
         job.sourceUrl?.let { DetailField("URL", it) }
         job.experienceMin?.let { DetailField("Experience minimum", "$it ${if (it == 1) "year" else "years"}") }
         job.experienceMax?.let { DetailField("Experience maximum", "$it ${if (it == 1) "year" else "years"}") }
         job.followUpAt?.let { DetailField("Follow-up", it.toString()) }
         job.skills.takeIf { it.isNotEmpty() }?.let { DetailField("Skills", it.joinToString(" · ")) }
+        job.mandatorySkills.takeIf { it.isNotEmpty() }?.let { DetailField("Mandatory skills", it.joinToString(" · ")) }
+        job.preferredSkills.takeIf { it.isNotEmpty() }?.let { DetailField("Preferred skills", it.joinToString(" · ")) }
         job.description?.let { DetailField("Description", it) }
         job.notes?.let { DetailField("Notes", it) }
+        job.captureMethod?.let { DetailField("Capture method", it) }
+        job.capturedAt?.let { DetailField("Captured at", it.toString()) }
+        job.rawCapturedText?.let { DetailField("Raw captured text", it) }
         androidx.compose.foundation.layout.Spacer(Modifier.padding(bottom = 10.dp))
     }
 }

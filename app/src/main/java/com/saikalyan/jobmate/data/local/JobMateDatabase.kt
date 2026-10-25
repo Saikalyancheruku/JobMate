@@ -3,6 +3,8 @@ package com.saikalyan.jobmate.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.saikalyan.jobmate.data.local.converters.AppTypeConverters
 import com.saikalyan.jobmate.data.local.dao.ContactDao
 import com.saikalyan.jobmate.data.local.dao.EmailAttemptDao
@@ -36,7 +38,7 @@ import com.saikalyan.jobmate.data.local.entity.SyncQueueEntity
         SyncQueueEntity::class,
         SyncConflictEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(AppTypeConverters::class)
@@ -50,4 +52,23 @@ abstract class JobMateDatabase : RoomDatabase() {
     abstract fun emailAttemptDao(): EmailAttemptDao
     abstract fun syncQueueDao(): SyncQueueDao
     abstract fun syncConflictDao(): SyncConflictDao
+
+    companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE jobs ADD COLUMN workArrangement TEXT")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN mandatorySkills TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN preferredSkills TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN companyRating TEXT")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN companyReviewCount TEXT")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN applicantCount INTEGER")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN postedText TEXT")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN vacancyCount INTEGER")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN experienceLevel TEXT")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN education TEXT")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN rawCapturedText TEXT")
+                database.execSQL("ALTER TABLE jobs ADD COLUMN capturedAt INTEGER")
+            }
+        }
+    }
 }

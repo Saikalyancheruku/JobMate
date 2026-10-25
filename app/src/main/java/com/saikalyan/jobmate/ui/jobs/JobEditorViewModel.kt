@@ -35,6 +35,19 @@ data class JobEditorForm(
     val followUpDate: String = "",
     val salaryText: String = "",
     val employmentType: String = "",
+    val workArrangement: String = "",
+    val mandatorySkills: String = "",
+    val preferredSkills: String = "",
+    val companyRating: String = "",
+    val companyReviewCount: String = "",
+    val applicantCount: String = "",
+    val postedText: String = "",
+    val vacancyCount: String = "",
+    val experienceLevel: String = "",
+    val education: String = "",
+    val captureMethod: String? = null,
+    val rawCapturedText: String? = null,
+    val capturedAt: Instant? = null,
     val notes: String = "",
 )
 
@@ -104,6 +117,12 @@ class JobEditorViewModel @Inject constructor(
             _uiState.value = state.copy(validationMessage = "Experience must be a whole number of years.")
             return
         }
+        val applicantCount = form.applicantCount.toOptionalInt()
+        val vacancyCount = form.vacancyCount.toOptionalInt()
+        if ((form.applicantCount.isNotBlank() && applicantCount == null) || (form.vacancyCount.isNotBlank() && vacancyCount == null)) {
+            _uiState.value = state.copy(validationMessage = "Applicant and vacancy counts must be whole numbers.")
+            return
+        }
         if ((min != null && min < 0) || (max != null && max < 0) || (min != null && max != null && min > max)) {
             _uiState.value = state.copy(validationMessage = "Experience range is invalid.")
             return
@@ -130,12 +149,27 @@ class JobEditorViewModel @Inject constructor(
             experienceMax = max,
             salaryText = form.salaryText.trim().ifEmpty { null },
             employmentType = form.employmentType.trim().ifEmpty { null },
+            workArrangement = form.workArrangement.trim().ifEmpty { null },
+            mandatorySkills = form.mandatorySkills.split(',').map(String::trim).filter(String::isNotBlank),
+            preferredSkills = form.preferredSkills.split(',').map(String::trim).filter(String::isNotBlank),
+            skills = (previous?.skills.orEmpty() + form.mandatorySkills.split(',').map(String::trim) + form.preferredSkills.split(',').map(String::trim)).filter(String::isNotBlank).distinctBy { it.lowercase() },
+            postedAt = previous?.postedAt,
+            companyRating = form.companyRating.trim().ifEmpty { null },
+            companyReviewCount = form.companyReviewCount.trim().ifEmpty { null },
+            applicantCount = applicantCount,
+            postedText = form.postedText.trim().ifEmpty { null },
+            vacancyCount = vacancyCount,
+            experienceLevel = form.experienceLevel.trim().ifEmpty { null },
+            education = form.education.trim().ifEmpty { null },
+            rawCapturedText = form.rawCapturedText,
+            capturedAt = form.capturedAt,
             source = form.source.trim().ifEmpty { null },
             sourceUrl = form.sourceUrl.trim().ifEmpty { null },
             status = form.status,
-            appliedAt = appliedAt ?: if (form.status == JobStatus.APPLIED) previous?.appliedAt ?: now else null,
+            appliedAt = appliedAt ?: previous?.appliedAt,
             followUpAt = followUp,
             notes = form.notes.trim().ifEmpty { null },
+            captureMethod = form.captureMethod,
             fingerprint = previous?.fingerprint ?: "manual:${UUID.randomUUID()}",
             createdAt = previous?.createdAt ?: now,
             updatedAt = now,
@@ -179,6 +213,19 @@ class JobEditorViewModel @Inject constructor(
         followUpDate = followUpAt?.atZone(ZoneOffset.UTC)?.toLocalDate()?.toString().orEmpty(),
         salaryText = salaryText.orEmpty(),
         employmentType = employmentType.orEmpty(),
+        workArrangement = workArrangement.orEmpty(),
+        mandatorySkills = mandatorySkills.joinToString(", "),
+        preferredSkills = preferredSkills.joinToString(", "),
+        companyRating = companyRating.orEmpty(),
+        companyReviewCount = companyReviewCount.orEmpty(),
+        applicantCount = applicantCount?.toString().orEmpty(),
+        postedText = postedText.orEmpty(),
+        vacancyCount = vacancyCount?.toString().orEmpty(),
+        experienceLevel = experienceLevel.orEmpty(),
+        education = education.orEmpty(),
+        captureMethod = captureMethod,
+        rawCapturedText = rawCapturedText,
+        capturedAt = capturedAt,
         notes = notes.orEmpty(),
     )
 

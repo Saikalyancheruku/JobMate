@@ -88,6 +88,16 @@ fun JobEditorScreen(
         }
         EditorField("Salary", state.form.salaryText) { onFormChange(state.form.copy(salaryText = it)) }
         EditorField("Employment type", state.form.employmentType) { onFormChange(state.form.copy(employmentType = it)) }
+        EditorField("Work arrangement", state.form.workArrangement) { onFormChange(state.form.copy(workArrangement = it)) }
+        EditorField("Mandatory skills (comma separated)", state.form.mandatorySkills) { onFormChange(state.form.copy(mandatorySkills = it)) }
+        EditorField("Preferred skills (comma separated)", state.form.preferredSkills) { onFormChange(state.form.copy(preferredSkills = it)) }
+        EditorField("Company rating", state.form.companyRating) { onFormChange(state.form.copy(companyRating = it)) }
+        EditorField("Company reviews", state.form.companyReviewCount) { onFormChange(state.form.copy(companyReviewCount = it)) }
+        EditorField("Applicant count", state.form.applicantCount) { onFormChange(state.form.copy(applicantCount = it)) }
+        EditorField("Posted text", state.form.postedText) { onFormChange(state.form.copy(postedText = it)) }
+        EditorField("Vacancy count", state.form.vacancyCount) { onFormChange(state.form.copy(vacancyCount = it)) }
+        EditorField("Experience level", state.form.experienceLevel) { onFormChange(state.form.copy(experienceLevel = it)) }
+        EditorField("Education", state.form.education) { onFormChange(state.form.copy(education = it)) }
         EditorField("Description", state.form.description, minLines = 3) {
             onFormChange(state.form.copy(description = it))
         }

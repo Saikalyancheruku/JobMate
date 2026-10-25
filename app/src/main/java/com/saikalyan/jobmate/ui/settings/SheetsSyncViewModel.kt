@@ -91,8 +91,16 @@ class SheetsSyncViewModel @Inject constructor(
         return JobEntity(values[0], values[2], values[3], values[4].ifBlank { null }, values[5].ifBlank { null }, skills,
             values[7].toIntOrNull(), values[8].toIntOrNull(), values[9].ifBlank { null }, values[10].ifBlank { null }, instant(values[11]),
             values[12].ifBlank { null }, values[13].ifBlank { null }, status, instant(values[15]), instant(values[16]), values[17].ifBlank { null },
-            values[18].ifBlank { null }, values[19], instant(values[20]) ?: Instant.now(), instant(values[21]) ?: Instant.now())
+            values[18].ifBlank { null }, values[19], instant(values[20]) ?: Instant.now(), instant(values[21]) ?: Instant.now(),
+            values.getOrNull(22)?.ifBlank { null }, values.getOrNull(23)?.let(::stringListFromJson).orEmpty(),
+            values.getOrNull(24)?.let(::stringListFromJson).orEmpty(), values.getOrNull(25)?.ifBlank { null },
+            values.getOrNull(26)?.ifBlank { null }, values.getOrNull(27)?.toIntOrNull(), values.getOrNull(28)?.ifBlank { null },
+            values.getOrNull(29)?.toIntOrNull(), values.getOrNull(30)?.ifBlank { null }, values.getOrNull(31)?.ifBlank { null },
+            null, values.getOrNull(32)?.let(::instant))
     }
+
+    private fun stringListFromJson(value: String): List<String> =
+        JSONArray(value).let { array -> (0 until array.length()).map { array.getString(it) } }
 
     private fun JSONArray.toContact(): ContactEntity {
         val values = (0 until length()).map { optString(it, "") }

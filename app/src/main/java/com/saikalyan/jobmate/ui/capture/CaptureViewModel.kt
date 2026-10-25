@@ -60,7 +60,7 @@ class CaptureViewModel @Inject constructor(
                     location = parsed.location?.value ?: draft.location,
                     description = listOf(draft.description, parsed.description).filter(String::isNotBlank).joinToString("\n\n"),
                     sourceUrl = parsed.sourceUrl?.value ?: draft.sourceUrl,
-                    source = "Screen capture",
+                    source = parsed.source?.value ?: "Screen capture",
                     skills = parsed.skills?.value ?: draft.skills,
                     experience = parsed.experience?.value ?: draft.experience,
                     salary = parsed.salary?.value ?: draft.salary,
@@ -70,7 +70,7 @@ class CaptureViewModel @Inject constructor(
                     saving = true,
                     message = "Capture received. Saving this job automatically…",
                 )
-                saveCapturedSection(parsed, parsed.description)
+                saveCapturedSection(parsed, parsed.description, section.screen.text, section.capturedAt)
             }
         }
     }
@@ -131,7 +131,12 @@ class CaptureViewModel @Inject constructor(
         }
     }
 
-    private suspend fun saveCapturedSection(parsed: com.saikalyan.jobmate.domain.usecase.ParsedJobFields, capturedText: String) {
+    private suspend fun saveCapturedSection(
+        parsed: com.saikalyan.jobmate.domain.usecase.ParsedJobFields,
+        capturedText: String,
+        rawCapturedText: String,
+        capturedAt: java.time.Instant,
+    ) {
         val now = clock.instant()
         val active = activeCaptureJob
         var isNewJob = active == null
@@ -147,7 +152,7 @@ class CaptureViewModel @Inject constructor(
             when (val existing = jobs.findByFingerprint(fingerprint)) {
                 is RepositoryResult.Success -> existing.value?.also { isNewJob = false } ?: Job(
                     id = UUID.randomUUID().toString(), title = title, companyName = company,
-                    status = JobStatus.SAVED, source = "Screen capture",
+                    status = JobStatus.SAVED, source = parsed.source?.value ?: "Screen capture",
                     sourceUrl = parsed.sourceUrl?.value?.trim()?.ifBlank { null },
                     captureMethod = "USER_CONSENTED_SCREEN_OCR", fingerprint = fingerprint,
                     createdAt = now, updatedAt = now,
@@ -171,15 +176,30 @@ class CaptureViewModel @Inject constructor(
         val parsedCompany = parsed.company?.value?.trim().orEmpty()
         val mergedSkills = (baseJob.skills + parsed.skills?.value.orEmpty().split(',').map(String::trim))
             .filter(String::isNotBlank).distinctBy { it.lowercase() }
+        val mergedRawText = listOf(baseJob.rawCapturedText.orEmpty(), rawCapturedText).filter(String::isNotBlank).joinToString("\n\n")
         val job = baseJob.copy(
             title = if (baseJob.title.startsWith("Captured job ") && parsedTitle.isNotBlank()) parsedTitle else baseJob.title,
             companyName = if (baseJob.companyName == "Company not detected" && parsedCompany.isNotBlank()) parsedCompany else baseJob.companyName,
             location = baseJob.location ?: parsed.location?.value?.trim()?.ifBlank { null },
+            workArrangement = baseJob.workArrangement ?: parsed.workArrangement?.value?.trim()?.ifBlank { null },
             description = mergedDescription,
             skills = mergedSkills,
+            mandatorySkills = (baseJob.mandatorySkills + parsed.mandatorySkills?.value.orEmpty().split(',').map(String::trim)).filter(String::isNotBlank).distinctBy { it.lowercase() },
+            preferredSkills = (baseJob.preferredSkills + parsed.preferredSkills?.value.orEmpty().split(',').map(String::trim)).filter(String::isNotBlank).distinctBy { it.lowercase() },
+            employmentType = baseJob.employmentType ?: parsed.employmentType?.value?.trim()?.ifBlank { null },
+            companyRating = baseJob.companyRating ?: parsed.companyRating?.value?.trim()?.ifBlank { null },
+            companyReviewCount = baseJob.companyReviewCount ?: parsed.companyReviewCount?.value?.trim()?.ifBlank { null },
+            applicantCount = baseJob.applicantCount ?: parsed.applicantCount?.value?.toIntOrNull(),
+            postedText = baseJob.postedText ?: parsed.postedText?.value?.trim()?.ifBlank { null },
+            vacancyCount = baseJob.vacancyCount ?: parsed.vacancyCount?.value?.toIntOrNull(),
+            experienceLevel = baseJob.experienceLevel ?: parsed.experienceLevel?.value?.trim()?.ifBlank { null },
+            education = baseJob.education ?: parsed.education?.value?.trim()?.ifBlank { null },
+            rawCapturedText = mergedRawText,
+            capturedAt = baseJob.capturedAt ?: capturedAt,
             experienceMin = baseJob.experienceMin ?: parsed.experienceMin,
             experienceMax = baseJob.experienceMax ?: parsed.experienceMax,
             salaryText = baseJob.salaryText ?: parsed.salary?.value?.trim()?.ifBlank { null },
+            source = if (baseJob.source == "Screen capture") parsed.source?.value ?: baseJob.source else baseJob.source,
             sourceUrl = baseJob.sourceUrl ?: parsed.sourceUrl?.value?.trim()?.ifBlank { null },
             updatedAt = now,
         )

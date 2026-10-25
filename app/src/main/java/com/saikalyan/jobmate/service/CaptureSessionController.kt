@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,7 +18,7 @@ sealed interface CaptureSessionState {
     data class Error(val message: String) : CaptureSessionState
 }
 
-data class CapturedTextSection(val screen: RecognizedScreen)
+data class CapturedTextSection(val screen: RecognizedScreen, val capturedAt: Instant)
 
 @Singleton
 class CaptureSessionController @Inject constructor() {
@@ -30,11 +31,11 @@ class CaptureSessionController @Inject constructor() {
 
     fun started() { _state.value = CaptureSessionState.Capturing }
     fun waitingForFrame() { _state.value = CaptureSessionState.WaitingForFrame }
-    fun publish(screen: RecognizedScreen) {
+    fun publish(screen: RecognizedScreen, capturedAt: Instant = Instant.now()) {
         if (screen.text.isBlank()) _state.value = CaptureSessionState.Error("No readable text was found in this screen section.")
         else {
             _state.value = CaptureSessionState.Saving
-            if (!_sections.tryEmit(CapturedTextSection(screen))) {
+            if (!_sections.tryEmit(CapturedTextSection(screen, capturedAt))) {
                 _state.value = CaptureSessionState.Error("Capture queue is busy. Wait briefly, then try again.")
             }
         }
