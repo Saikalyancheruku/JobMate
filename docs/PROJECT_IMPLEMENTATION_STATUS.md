@@ -56,6 +56,7 @@ Tests were explicitly deferred for the newer feature phases. Seven JVM test file
 - The 2026-10-25 Phase 7 Step 42 change preserves ML Kit text line geometry through the capture controller and uses it during title/company/location parsing. See [PHASE-07-STEP-42](progress/PHASE-07-STEP-42.md); it has not yet been built or exercised on-device.
 - The 2026-10-25 Phase 7 Step 43 changes use the supplied LinkedIn/Naukri screenshots to adjust header order, location metadata cleanup, skills headings, description chrome filtering, and capture overlay visibility. See [PHASE-07-STEP-43](progress/PHASE-07-STEP-43.md); no build or device verification has been run.
 - The 2026-10-25 cross-cutting UI refresh updates navigation, theme, dashboard, job list/detail, and capture guidance. See [UI-REDESIGN-2026-10-25](progress/UI-REDESIGN-2026-10-25.md); no build or device visual verification has been run.
+- GitHub Actions reported a `NavigationBarItem` scope error in `AppNavHost.kt`; the More destinations now use a bottom sheet. Local Kotlin compilation could not start because no Android SDK path is configured. See [UI-REDESIGN-CI-FIX-2026-10-25](progress/UI-REDESIGN-CI-FIX-2026-10-25.md); CI confirmation remains pending.
 - The audit made no Git mutations; the checkout already had `.git` and an `origin` remote.
 - The root `.gitignore` is absent, and `app/schemas/` has no exported Room schema JSON yet (only `.gitkeep`).
 
