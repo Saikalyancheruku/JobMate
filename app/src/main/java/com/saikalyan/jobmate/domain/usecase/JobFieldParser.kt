@@ -65,10 +65,12 @@ class JobFieldParser {
             Layout.GENERIC -> 0.58f
         }
         val headerLines = lines.filter { it.top <= headerLimit }
-        val titleLine = chooseTitle(headerLines)
+        val ratingHeader = chooseHeaderFromRating(headerLines)
+        val inlineHeader = findInlineHeader(headerLines)
+        val titleLine = ratingHeader?.title ?: inlineHeader?.first ?: chooseTitle(headerLines)
         val titleIndex = titleLine?.let(headerLines::indexOf) ?: -1
         val explicitCompany = findExplicitValue(lines, COMPANY_LABEL)
-        val companyLine = explicitCompany ?: when (layout) {
+        val companyLine = explicitCompany ?: ratingHeader?.company ?: inlineHeader?.second ?: when (layout) {
             // LinkedIn's header places the company immediately above the title.
             Layout.LINKEDIN -> chooseCompanyBeforeTitle(headerLines, titleLine)
             // Naukri's detail header places the company immediately below the title.
@@ -162,6 +164,62 @@ class JobFieldParser {
             val topPreference = if (line.top in 0.07f..0.48f) 0.20f else 0f
             line.height * 10f + topPreference - line.top * 0.25f + line.text.length.coerceAtMost(70) * 0.001f
         }
+
+    /**
+     * Naukri places company name immediately above its rating/review row and the
+     * role immediately above company. This anchor avoids selecting promo/banner text.
+     */
+    private data class HeaderPair(val title: RecognizedLine, val company: RecognizedLine)
+
+    private fun chooseHeaderFromRating(headerLines: List<RecognizedLine>): HeaderPair? {
+        val reviewsIndex = headerLines.indexOfFirst { REVIEWS.containsMatchIn(it.text) }
+        if (reviewsIndex <= 0) return null
+        val ratingIndex = (reviewsIndex - 1 downTo 0).firstOrNull { index ->
+            headerLines[index].top < headerLines[reviewsIndex].top &&
+                headerLines[reviewsIndex].top - headerLines[index].top <= 0.055f &&
+                SOLO_RATING.matches(headerLines[index].text.trim())
+        } ?: reviewsIndex
+        val companyIndex = (ratingIndex - 1 downTo 0).firstOrNull { index ->
+            isCompanyHeaderCandidate(headerLines[index])
+        } ?: return null
+        val titleIndex = (companyIndex - 1 downTo 0).firstOrNull { index ->
+            isTitleHeaderCandidate(headerLines[index])
+        } ?: return null
+        val company = headerLines[companyIndex]
+        val title = headerLines[titleIndex]
+        return HeaderPair(title, company)
+    }
+
+    private fun findInlineHeader(headerLines: List<RecognizedLine>): Pair<RecognizedLine, RecognizedLine>? {
+        val pattern = Regex("^(.{4,80}?)\\s+@\\s*([A-Za-z][A-Za-z0-9._-]{1,50})$")
+        for (line in headerLines) {
+            val match = pattern.matchEntire(line.text.trim()) ?: continue
+            val title = match.groupValues[1].trim()
+            val company = match.groupValues[2].trim()
+            if (title.contains('@') || UI_NOISE.containsMatchIn(title) || PROMOTIONAL_NOISE.containsMatchIn(title)) continue
+            return line.copy(text = title) to line.copy(text = company)
+        }
+        return null
+    }
+
+    private fun isCompanyHeaderCandidate(line: RecognizedLine): Boolean {
+        val value = line.text.trim()
+        return value.length in 2..90 && !UI_NOISE.containsMatchIn(value) &&
+            !METADATA.containsMatchIn(value) && !PROMOTIONAL_NOISE.containsMatchIn(value) &&
+            !LOCATION_LIKELY.containsMatchIn(value) && !APPLICANTS.containsMatchIn(value) &&
+            !SOLO_RATING.matches(value) && !SECTION_HEADING.matches(value) &&
+            (!REVIEWS.containsMatchIn(value) || cleanCompany(value).trim() != value)
+    }
+
+    private fun isTitleHeaderCandidate(line: RecognizedLine): Boolean {
+        val value = line.text.trim()
+        return value.length in 4..110 && !value.contains('@') &&
+            !UI_NOISE.containsMatchIn(value) && !METADATA.containsMatchIn(value) &&
+            !PROMOTIONAL_NOISE.containsMatchIn(value) && !REVIEWS.containsMatchIn(value) &&
+            !APPLICANTS.containsMatchIn(value) && !SOLO_RATING.matches(value) &&
+            !SECTION_HEADING.matches(value) && !COMPANY_LABEL.containsMatchIn(value) &&
+            !LOCATION_LABEL.containsMatchIn(value)
+    }
 
     private fun chooseCompany(
         headerLines: List<RecognizedLine>,
