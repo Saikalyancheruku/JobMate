@@ -6,16 +6,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,26 +78,30 @@ private fun JobDetails(
     onRequestDelete: () -> Unit,
     modifier: Modifier,
 ) {
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(job.title, style = MaterialTheme.typography.headlineMedium)
-        Text(job.companyName, style = MaterialTheme.typography.titleLarge)
-        job.location?.let { Text(it) }
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f), shape = MaterialTheme.shapes.small) {
+                    Text(job.status.displayLabel, modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                }
+                Text(job.title, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text(job.companyName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                job.location?.let { Text("⌖  $it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer) }
+            }
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onEdit) { Text("Edit") }
+            Button(onClick = onEdit) { Text("Edit details") }
             if (job.status != JobStatus.CLOSED) OutlinedButton(onClick = onArchive) { Text("Archive") }
             OutlinedButton(onClick = onRequestDelete) { Text("Delete") }
         }
-        Text("Status", style = MaterialTheme.typography.titleMedium)
-        Column {
-            JobStatus.entries.chunked(4).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.forEach { status ->
-                        FilterChip(
-                            selected = job.status == status,
-                            onClick = { onStatusChange(status) },
-                            label = { Text(status.displayLabel) },
-                        )
-                    }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Update status", style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                JobStatus.entries.forEach { status ->
+                    FilterChip(selected = job.status == status, onClick = { onStatusChange(status) }, label = { Text(status.displayLabel) })
                 }
             }
         }
@@ -103,19 +111,23 @@ private fun JobDetails(
         job.employmentType?.let { DetailField("Employment type", it) }
         job.appliedAt?.let { DetailField("Applied", it.atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()) }
         job.sourceUrl?.let { DetailField("URL", it) }
-        job.experienceMin?.let { DetailField("Experience minimum", "$it years") }
-        job.experienceMax?.let { DetailField("Experience maximum", "$it years") }
+        job.experienceMin?.let { DetailField("Experience minimum", "$it ${if (it == 1) "year" else "years"}") }
+        job.experienceMax?.let { DetailField("Experience maximum", "$it ${if (it == 1) "year" else "years"}") }
         job.followUpAt?.let { DetailField("Follow-up", it.toString()) }
+        job.skills.takeIf { it.isNotEmpty() }?.let { DetailField("Skills", it.joinToString(" · ")) }
         job.description?.let { DetailField("Description", it) }
         job.notes?.let { DetailField("Notes", it) }
+        androidx.compose.foundation.layout.Spacer(Modifier.padding(bottom = 10.dp))
     }
 }
 
 @Composable
 private fun DetailField(label: String, value: String) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelMedium)
-        Text(value, style = MaterialTheme.typography.bodyLarge)
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(value, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
     }
 }
 

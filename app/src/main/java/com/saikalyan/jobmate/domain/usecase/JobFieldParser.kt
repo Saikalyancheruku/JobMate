@@ -52,7 +52,12 @@ class JobFieldParser {
         val titleLine = chooseTitle(headerLines)
         val titleIndex = titleLine?.let(headerLines::indexOf) ?: -1
         val explicitCompany = findExplicitValue(lines, COMPANY_LABEL)
-        val companyLine = explicitCompany ?: chooseCompany(headerLines, titleIndex, titleLine)
+        val companyLine = explicitCompany ?: when (layout) {
+            // LinkedIn's header places the company immediately above the title.
+            Layout.LINKEDIN -> chooseCompanyBeforeTitle(headerLines, titleLine)
+            // Naukri's detail header places the company immediately below the title.
+            Layout.NAUKRI, Layout.GENERIC -> chooseCompany(headerLines, titleIndex, titleLine)
+        }
         val explicitLocation = findExplicitValue(lines, LOCATION_LABEL)
         val locationLine = explicitLocation ?: chooseLocation(headerLines, companyLine)
         val experienceLine = lines.firstOrNull { EXPERIENCE.matches(it.text) || EXPERIENCE_LABEL.containsMatchIn(it.text) }
@@ -72,12 +77,12 @@ class JobFieldParser {
         return ParsedJobFields(
             title = candidate(titleLine, titleConfidence),
             company = candidate(companyLine, if (explicitCompany != null) 0.96f else if (layout == Layout.GENERIC) 0.66f else 0.82f),
-            location = candidate(locationLine, if (explicitLocation != null) 0.96f else 0.78f),
+            location = candidate(locationLine?.let { it.copy(text = cleanLocation(it.text)) }, if (explicitLocation != null) 0.96f else 0.78f),
             skills = skillsCandidate,
             experience = candidate(experienceLine, if (EXPERIENCE.matches(experienceLine?.text.orEmpty())) 0.95f else 0.78f),
             salary = candidate(salaryLine, if (SALARY.matches(salaryLine?.text.orEmpty())) 0.92f else 0.78f),
             sourceUrl = url?.let { FieldCandidate(it, 0.99f, it) },
-            description = screen.text.trim(),
+            description = cleanDescription(screen),
         )
     }
 
@@ -121,6 +126,18 @@ class JobFieldParser {
         }
     }
 
+    private fun chooseCompanyBeforeTitle(
+        headerLines: List<RecognizedLine>,
+        titleLine: RecognizedLine?,
+    ): RecognizedLine? {
+        if (titleLine == null) return null
+        return headerLines.asReversed().firstOrNull { line ->
+            line.bottom <= titleLine.top + 0.005f && line.text.trim().length in 3..90 &&
+                !UI_NOISE.containsMatchIn(line.text) && !METADATA.containsMatchIn(line.text) &&
+                !SECTION_HEADING.matches(line.text) && !LOCATION_LIKELY.containsMatchIn(line.text)
+        }
+    }
+
     private fun chooseLocation(
         headerLines: List<RecognizedLine>,
         companyLine: RecognizedLine?,
@@ -128,11 +145,25 @@ class JobFieldParser {
         val afterCompany = companyLine?.top ?: 0f
         val followingLines = headerLines.filter { line -> line.top >= afterCompany && line != companyLine }
         return followingLines.take(6).firstOrNull { line ->
-            LOCATION_LIKELY.containsMatchIn(line.text) && !METADATA.containsMatchIn(line.text)
+            LOCATION_LIKELY.containsMatchIn(line.text)
         } ?: followingLines.take(4).firstOrNull { line ->
             line.text.contains(',') && line.text.length <= 100 && !METADATA.containsMatchIn(line.text) &&
                 !UI_NOISE.containsMatchIn(line.text)
         }
+    }
+
+    private fun cleanLocation(value: String): String = value
+        .replace(Regex("(?i)[·•]?\\s*\\d+\\s+(?:days?|weeks?|months?|years?)\\s+ago.*$"), "")
+        .replace(Regex("(?i)[·•]?\\s*(?:over|more than)\\s+\\d+\\s+applicants?.*$"), "")
+        .replace(Regex("(?i)[·•]?\\s*\\d+\\s+applicants?.*$"), "")
+        .trim(' ', '·', '•', '|', '-')
+
+    private fun cleanDescription(screen: RecognizedScreen): String {
+        val sourceLines = screen.lines.map { it.text.trim() }.filter(String::isNotBlank)
+        val lines = if (sourceLines.isEmpty()) screen.text.lineSequence().map(String::trim).toList() else sourceLines
+        return lines.filterNot { line ->
+            UI_NOISE.matches(line) || CHROME_NOISE.matches(line) || CAPTURE_CONTROL.matches(line)
+        }.distinct().joinToString("\n").trim()
     }
 
     private fun findExplicitValue(lines: List<RecognizedLine>, label: Regex): RecognizedLine? {
@@ -148,6 +179,15 @@ class JobFieldParser {
     }
 
     private fun chooseSkills(lines: List<RecognizedLine>): FieldCandidate? {
+        val naukriSkillHeading = Regex("(?i)^(?:must have skills|good to have skills)\\s*:?$")
+        val naukriIndex = lines.indexOfFirst { naukriSkillHeading.matches(it.text.trim()) }
+        if (naukriIndex >= 0) {
+            val heading = lines[naukriIndex]
+            val skills = lines.drop(naukriIndex + 1).takeWhile { line ->
+                !naukriSkillHeading.matches(line.text.trim()) && !SECTION_HEADING.matches(line.text.trim())
+            }.take(8).map { it.text.trim() }.filterNot { UI_NOISE.matches(it) }
+            if (skills.isNotEmpty()) return FieldCandidate(skills.joinToString(", "), 0.86f, heading.text)
+        }
         val headingIndex = lines.indexOfFirst { SKILLS_HEADING.containsMatchIn(it.text) }
         if (headingIndex >= 0) {
             val heading = lines[headingIndex]
@@ -175,8 +215,10 @@ class JobFieldParser {
         val SALARY = Regex("(?i)(salary|compensation|\\bctc\\b|\\blpa\\b|\\blacs?\\b|\\blakhs?\\b|₹|\\$|€|£)")
         val SKILLS_HEADING = Regex("(?i)\\b(?:key\\s+)?skills?\\b")
         val SECTION_HEADING = Regex("(?i)^(about the job|job description|description|key skills|skills|required skills|role|responsibilities|requirements|qualifications|education|about company|company profile|employment type|industry|role category)\\s*:?$")
-        val UI_NOISE = Regex("(?i)^(jobs?|search|home|messaging|notifications?|apply(?: now)?|easy apply|quick apply|save(?:d)?|posted|see more|see all|share|follow|promoted|verified|top applicant|job alert)$|\\b(?:applicants?|followers?|connections?)\\b|\\b\\d+\\s+(?:applicants?|followers?)\\b")
+        val UI_NOISE = Regex("(?i)^(jobs?|search|home|messaging|notifications?|apply(?: now)?|easy apply|quick apply|save(?:d)?|posted|see more|see all|share|follow|promoted|verified|top applicant|job alert|next|dashboard|edit|status|saved|rejected|archive|delete|import|contacts|resumes|settings|app settings|sheets sync|capture review)$|\\b(?:applicants?|followers?|connections?)\\b|\\b\\d+\\s+(?:applicants?|followers?)\\b")
         val METADATA = Regex("(?i)\\b(?:experience|work\\s+exp|salary|compensation|ctc|lpa|lacs?|lakhs?|posted|applicants?|job type|employment type|full[- ]time|part[- ]time|contract|internship|hybrid|on[- ]site|onsite|remote|years? of experience)\\b|₹|\\$|€|£")
         val LOCATION_LIKELY = Regex("(?i)\\b(remote|hybrid|on[- ]site|onsite|work from home|india|united states|united kingdom|canada|australia|bengaluru|bangalore|mumbai|pune|hyderabad|chennai|delhi|gurugram|gurgaon|noida|kolkata|ahmedabad|jaipur|karnataka|maharashtra|telangana|tamil nadu|greater [a-z ]+ area)\\b")
+        val CHROME_NOISE = Regex("(?i)^(?:JobMate|JobMate Dashboard|Dashboard|Job Details|About Company|Edit|Status|Saved|Rejected|Archive|Delete|Import|Contacts|Resumes|Settings|App settings|Sheets sync|Capture review|Job poster|People you can reach out to|Meet the hiring team|People in your network|Show match details|Help me stand out|Use AI to assess how you fit)$")
+        val CAPTURE_CONTROL = Regex("(?i)^(?:CAP|NEXT|SAVE|OCR|✓|!)$")
     }
 }

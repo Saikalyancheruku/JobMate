@@ -1,22 +1,27 @@
 package com.saikalyan.jobmate.ui.navigation
 
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,43 +71,100 @@ private object Routes {
     const val CAPTURE_REVIEW = "capture-review"
 }
 
-private data class NavItem(val route: String, val title: String)
+private data class NavItem(val route: String, val title: String, val symbol: String = "")
 
-private val navItems = listOf(
-    NavItem(Routes.DASHBOARD, "Dashboard"),
-    NavItem(Routes.JOBS, "Jobs"),
+private val primaryNavItems = listOf(
+    NavItem(Routes.DASHBOARD, "Home", "⌂"),
+    NavItem(Routes.JOBS, "Jobs", "▤"),
+    NavItem(Routes.CAPTURE_REVIEW, "Capture", "+"),
+)
+
+private val moreNavItems = listOf(
     NavItem(Routes.CONTACTS, "Contacts"),
-    NavItem(Routes.CONTACT_IMPORT, "Import"),
+    NavItem(Routes.CONTACT_IMPORT, "Import contacts"),
     NavItem(Routes.RESUMES, "Resumes"),
     NavItem(Routes.TEMPLATES, "Templates"),
     NavItem(Routes.OUTREACH, "Outreach"),
     NavItem(Routes.FOLLOW_UPS, "Follow-ups"),
-    NavItem(Routes.SETTINGS, "Settings"),
+    NavItem(Routes.SETTINGS, "Gmail settings"),
     NavItem(Routes.APP_SETTINGS, "App settings"),
     NavItem(Routes.SHEETS_SYNC, "Sheets sync"),
-    NavItem(Routes.CAPTURE_REVIEW, "Capture review"),
 )
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val route = currentDestination?.route.orEmpty()
+    var moreExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(sharedText) {
         if (!sharedText.isNullOrBlank()) navController.navigate(Routes.CAPTURE_REVIEW) { launchSingleTop = true }
     }
 
+    val title = when (route) {
+        Routes.DASHBOARD -> "JobMate"
+        Routes.JOBS -> "Your jobs"
+        Routes.CAPTURE_REVIEW -> "Capture a job"
+        Routes.CONTACTS -> "Contacts"
+        Routes.CONTACT_IMPORT -> "Import contacts"
+        Routes.RESUMES -> "Resumes"
+        Routes.TEMPLATES -> "Email templates"
+        Routes.OUTREACH -> "Outreach"
+        Routes.FOLLOW_UPS -> "Follow-ups"
+        Routes.SETTINGS -> "Gmail settings"
+        Routes.APP_SETTINGS -> "App settings"
+        Routes.SHEETS_SYNC -> "Sheets sync"
+        Routes.NEW_JOB -> "Add a job"
+        Routes.EDIT_JOB -> "Edit job"
+        Routes.JOB_DETAIL -> "Job details"
+        Routes.CONTACT_MATCH -> "Company matches"
+        else -> "JobMate"
+    }
+    val isNested = route.startsWith("job/") || route.startsWith("job-editor/") || route.startsWith("contacts/")
+
     Scaffold(
         modifier = modifier,
         topBar = {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp)) {
-                navItems.forEach { item ->
-                    FilterChip(
-                        selected = currentDestination?.route == item.route,
-                        onClick = { navController.navigate(item.route) { launchSingleTop = true } },
+            TopAppBar(
+                title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = {
+                    if (isNested) IconButton(onClick = { navController.popBackStack() }) {
+                        Text("‹", style = MaterialTheme.typography.headlineMedium)
+                    }
+                },
+            )
+        },
+        bottomBar = {
+            NavigationBar {
+                primaryNavItems.forEach { item ->
+                    NavigationBarItem(
+                        selected = route == item.route || (item.route == Routes.JOBS && (route.startsWith("job/") || route.startsWith("job-editor/"))),
+                        onClick = { moreExpanded = false; navController.navigate(item.route) { launchSingleTop = true } },
+                        icon = { Text(item.symbol, style = MaterialTheme.typography.titleLarge) },
                         label = { Text(item.title) },
-                        modifier = Modifier.padding(horizontal = 4.dp),
                     )
+                }
+                Box(Modifier.weight(1f)) {
+                    NavigationBarItem(
+                        modifier = Modifier.fillMaxWidth(),
+                        selected = moreNavItems.any { route == it.route || route.startsWith("${it.route}/") },
+                        onClick = { moreExpanded = true },
+                        icon = { Text("•••", style = MaterialTheme.typography.titleMedium) },
+                        label = { Text("More") },
+                    )
+                    DropdownMenu(expanded = moreExpanded, onDismissRequest = { moreExpanded = false }) {
+                        moreNavItems.forEach { item ->
+                            DropdownMenuItem(
+                                text = { Text(item.title) },
+                                onClick = {
+                                    moreExpanded = false
+                                    navController.navigate(item.route) { launchSingleTop = true }
+                                },
+                            )
+                        }
+                    }
                 }
             }
         },
@@ -199,21 +261,5 @@ fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
         }
     }
 }
-
-@Composable
-private fun DestinationPlaceholder(title: String) {
-    Column(Modifier.fillMaxSize().padding(24.dp)) {
-        Text(text = title, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Navigation shell only. This feature will be implemented in a later step.",
-            style = MaterialTheme.typography.bodyLarge,
-        )
-    }
-}
-
-
-
-
 
 

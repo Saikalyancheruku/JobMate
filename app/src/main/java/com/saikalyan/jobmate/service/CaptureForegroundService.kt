@@ -215,7 +215,9 @@ class CaptureForegroundService : Service() {
         if (!captureInProgress.compareAndSet(false, true)) {
             return
         }
-        captureBubble?.visibility = View.INVISIBLE
+        // Hide the complete overlay window while MediaProjection captures the target app.
+        // Hiding only CAP leaves NEXT visible and OCR records it as job text.
+        captureBubbleRoot?.visibility = View.INVISIBLE
         controller.waitingForFrame()
         val request = Runnable {
             pendingCaptureStart = null
@@ -355,6 +357,7 @@ class CaptureForegroundService : Service() {
 
     private fun updateCaptureBubble(state: CaptureSessionState) {
         val bubble = captureBubble ?: return
+        captureBubbleRoot?.visibility = if (state == CaptureSessionState.WaitingForFrame) View.INVISIBLE else View.VISIBLE
         when (state) {
             CaptureSessionState.Idle -> bubble.text = "CAP"
             CaptureSessionState.Capturing -> { bubble.text = "CAP"; bubble.visibility = View.VISIBLE }
