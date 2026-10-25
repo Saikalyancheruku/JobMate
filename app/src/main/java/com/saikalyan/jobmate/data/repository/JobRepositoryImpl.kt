@@ -188,6 +188,7 @@ class JobRepositoryImpl @Inject constructor(
             education = education,
             rawCapturedText = rawCapturedText,
             capturedAt = capturedAt,
+            aiCorrected = aiCorrected,
         )
     }
 
@@ -225,6 +226,7 @@ class JobRepositoryImpl @Inject constructor(
         education = education,
         rawCapturedText = rawCapturedText,
         capturedAt = capturedAt,
+        aiCorrected = aiCorrected,
     )
 
     private companion object {

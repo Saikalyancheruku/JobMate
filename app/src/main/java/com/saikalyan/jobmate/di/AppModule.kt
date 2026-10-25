@@ -52,7 +52,7 @@ object AppModule {
     fun provideDatabase(@ApplicationContext context: Context): JobMateDatabase =
         // No destructive fallback: future schema changes must register explicit migrations.
         Room.databaseBuilder(context, JobMateDatabase::class.java, "jobmate.db")
-            .addMigrations(JobMateDatabase.MIGRATION_1_2)
+            .addMigrations(JobMateDatabase.MIGRATION_1_2, JobMateDatabase.MIGRATION_2_3)
             .build()
 
     @Provides

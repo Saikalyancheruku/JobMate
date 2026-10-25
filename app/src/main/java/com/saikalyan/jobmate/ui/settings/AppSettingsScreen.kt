@@ -37,7 +37,7 @@ fun AppSettingsRoute(viewModel: AppSettingsViewModel = hiltViewModel()) {
     }
     if (confirmDelete) AlertDialog(
         onDismissRequest = { confirmDelete = false }, title = { Text("Delete all JobMate data?") },
-        text = { Text("This permanently removes local jobs, contacts, outreach records, templates, resume PDFs, sync settings, and the saved Gmail App Password. Google Sheets data already in Drive remains there.") },
+        text = { Text("This permanently removes local jobs, contacts, outreach records, templates, resume PDFs, sync settings, the saved Gmail App Password, and any saved AI provider key. Google Sheets data already in Drive remains there.") },
         confirmButton = { TextButton(onClick = { confirmDelete = false; viewModel.deleteAll() }) { Text("Delete everything") } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
     )

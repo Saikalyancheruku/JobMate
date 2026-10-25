@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.WorkManager
 import com.saikalyan.jobmate.data.local.JobMateDatabase
 import com.saikalyan.jobmate.data.secure.SecureCredentialStore
+import com.saikalyan.jobmate.data.secure.AiApiKeyStore
 import com.saikalyan.jobmate.data.secure.SheetsSyncPreferences
 import com.saikalyan.jobmate.worker.GoogleSheetsSyncWorker
 import com.google.android.gms.auth.api.identity.Identity
@@ -23,6 +24,7 @@ class PrivacyDataManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val database: JobMateDatabase,
     private val credentials: SecureCredentialStore,
+    private val aiApiKeyStore: AiApiKeyStore,
     private val sheetsPreferences: SheetsSyncPreferences,
 ) {
     suspend fun deleteAll() = withContext(Dispatchers.IO) {
@@ -33,6 +35,7 @@ class PrivacyDataManager @Inject constructor(
         }
         sheetsPreferences.disconnect()
         credentials.clear()
+        aiApiKeyStore.clear()
         database.clearAllTables()
         File(context.filesDir, "resumes").deleteRecursively()
         File(context.cacheDir, "exports").deleteRecursively()

@@ -37,6 +37,7 @@ fun JobDetailScreen(
     onStatusChange: (JobStatus) -> Unit,
     onArchive: () -> Unit,
     onDelete: () -> Unit,
+    onCorrectDetails: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -59,7 +60,10 @@ fun JobDetailScreen(
         is JobDetailUiState.Content -> JobDetails(
             job = state.job,
             actionError = state.actionError,
+            correctionMessage = state.correctionMessage,
+            isCorrecting = state.isCorrecting,
             onEdit = onEdit,
+            onCorrectDetails = onCorrectDetails,
             onStatusChange = onStatusChange,
             onArchive = onArchive,
             onRequestDelete = { confirmDelete = true },
@@ -72,7 +76,10 @@ fun JobDetailScreen(
 private fun JobDetails(
     job: Job,
     actionError: String?,
+    correctionMessage: String?,
+    isCorrecting: Boolean,
     onEdit: () -> Unit,
+    onCorrectDetails: () -> Unit,
     onStatusChange: (JobStatus) -> Unit,
     onArchive: () -> Unit,
     onRequestDelete: () -> Unit,
@@ -97,6 +104,13 @@ private fun JobDetails(
             if (job.status != JobStatus.CLOSED) OutlinedButton(onClick = onArchive) { Text("Archive") }
             OutlinedButton(onClick = onRequestDelete) { Text("Delete") }
         }
+        if (!job.rawCapturedText.isNullOrBlank()) {
+            Button(onClick = onCorrectDetails, enabled = !isCorrecting, modifier = Modifier.fillMaxWidth()) {
+                if (isCorrecting) CircularProgressIndicator()
+                else Text(if (job.aiCorrected) "Correct again with Gemini Flash-Lite" else "Correct details with Gemini Flash-Lite")
+            }
+            Text("Only this job’s saved OCR text is sent to Gemini. Application status, applied date, follow-up date, notes, and capture history are preserved.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Update status", style = MaterialTheme.typography.titleMedium)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -106,6 +120,7 @@ private fun JobDetails(
             }
         }
         actionError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        correctionMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
         job.source?.let { DetailField("Source", it) }
         job.salaryText?.let { DetailField("Salary", it) }
         job.employmentType?.let { DetailField("Employment type", it) }

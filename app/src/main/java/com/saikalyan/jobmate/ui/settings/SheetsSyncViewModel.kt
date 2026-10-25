@@ -72,7 +72,11 @@ class SheetsSyncViewModel @Inject constructor(
             val values = JSONObject(conflict.remoteSnapshot).getJSONArray("values")
             val remoteDeleted = values.optString(1).equals("true", true)
             when (conflict.entityType) {
-                "JOB" -> if (remoteDeleted) database.jobDao().deleteById(conflict.entityId) else database.jobDao().upsert(values.toJob())
+                "JOB" -> if (remoteDeleted) database.jobDao().deleteById(conflict.entityId) else {
+                    val remoteJob = values.toJob()
+                    val localJob = database.jobDao().findById(conflict.entityId)
+                    database.jobDao().upsert(remoteJob.copy(aiCorrected = localJob?.aiCorrected ?: false))
+                }
                 "CONTACT" -> if (remoteDeleted) database.contactDao().deleteById(conflict.entityId) else database.contactDao().upsert(values.toContact())
             }
             queue.updateState(conflict.id, SyncQueueManager.STATE_SYNCED, 0, null, Instant.now())

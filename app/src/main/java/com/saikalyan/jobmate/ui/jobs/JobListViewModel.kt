@@ -27,7 +27,10 @@ data class JobListUiState(
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
     val actionMessage: String? = null,
+    val captureFilter: CaptureFilter = CaptureFilter.ALL,
 )
+
+enum class CaptureFilter { ALL, SCRAPED, CORRECTED }
 
 @HiltViewModel
 class JobListViewModel @Inject constructor(
@@ -36,6 +39,7 @@ class JobListViewModel @Inject constructor(
     private val query = MutableStateFlow("")
     private val status = MutableStateFlow<JobStatus?>(null)
     private val refresh = MutableStateFlow(0)
+    private val captureFilter = MutableStateFlow(CaptureFilter.ALL)
     private val _uiState = MutableStateFlow(JobListUiState())
     val uiState: StateFlow<JobListUiState> = _uiState.asStateFlow()
 
@@ -49,6 +53,11 @@ class JobListViewModel @Inject constructor(
     fun setStatusFilter(value: JobStatus?) {
         status.value = value
         _uiState.value = _uiState.value.copy(statusFilter = value)
+    }
+
+    fun setCaptureFilter(value: CaptureFilter) {
+        captureFilter.value = value
+        _uiState.value = _uiState.value.copy(captureFilter = value)
     }
 
     fun retry() { refresh.value += 1 }
@@ -74,20 +83,25 @@ class JobListViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
     private fun observeJobs() {
         viewModelScope.launch {
-            combine(query.debounce(300), status, refresh) { text, selectedStatus, _ -> text to selectedStatus }
-                .flatMapLatest { (text, selectedStatus) ->
+            combine(query.debounce(300), status, captureFilter, refresh) { text, selectedStatus, capture, _ -> Triple(text, selectedStatus, capture) }
+                .flatMapLatest { (text, selectedStatus, capture) ->
                     repository.observeJobs(selectedStatus)
                         .onStart { _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null) }
-                        .map { result -> result to text }
+                        .map { result -> Triple(result, text, capture) }
                 }
-                .collect { (result, text) ->
+                .collect { (result, text, capture) ->
                     when (result) {
                         is RepositoryResult.Success -> {
                             val needle = text.trim()
-                            val filtered = if (needle.isEmpty()) result.value else result.value.filter { job ->
+                            val searched = if (needle.isEmpty()) result.value else result.value.filter { job ->
                                 job.title.contains(needle, true) ||
                                     job.companyName.contains(needle, true) ||
                                     job.location.orEmpty().contains(needle, true)
+                            }
+                            val filtered = when (capture) {
+                                CaptureFilter.ALL -> searched
+                                CaptureFilter.SCRAPED -> searched.filter { !it.rawCapturedText.isNullOrBlank() }
+                                CaptureFilter.CORRECTED -> searched.filter(Job::aiCorrected)
                             }
                             _uiState.value = _uiState.value.copy(
                                 jobs = filtered,

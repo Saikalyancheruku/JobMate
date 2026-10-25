@@ -32,10 +32,12 @@ fun JobListScreen(
     state: JobListUiState,
     onSearch: (String) -> Unit,
     onStatusFilter: (JobStatus?) -> Unit,
+    onCaptureFilter: (CaptureFilter) -> Unit,
     onRetry: () -> Unit,
     onAddJob: () -> Unit,
     onOpenJob: (String) -> Unit,
     onArchive: (String) -> Unit,
+    onCorrect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize().padding(horizontal = 20.dp)) {
@@ -64,6 +66,14 @@ fun JobListScreen(
                 )
             }
         }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(CaptureFilter.ALL to "All sources", CaptureFilter.SCRAPED to "Scraped", CaptureFilter.CORRECTED to "Corrected").forEach { (filter, label) ->
+                FilterChip(selected = state.captureFilter == filter, onClick = { onCaptureFilter(filter) }, label = { Text(label) })
+            }
+        }
+        if (state.captureFilter == CaptureFilter.CORRECTED) {
+            Text("Jobs corrected with Gemini are shown here.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         state.actionMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         when {
             state.isLoading -> CircularProgressIndicator(Modifier.padding(24.dp))
@@ -72,13 +82,13 @@ fun JobListScreen(
                 Button(onClick = onRetry, modifier = Modifier.padding(top = 8.dp)) { Text("Retry") }
             }
             state.jobs.isEmpty() -> Text(
-                if (state.searchQuery.isBlank() && state.statusFilter == null) "No jobs saved yet. Add a job to get started."
+                if (state.searchQuery.isBlank() && state.statusFilter == null && state.captureFilter == CaptureFilter.ALL) "No jobs saved yet. Add a job to get started."
                 else "No jobs match this search or filter.",
                 modifier = Modifier.padding(vertical = 20.dp),
             )
             else -> LazyColumn(Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(state.jobs, key = Job::id) { job ->
-                    JobListCard(job, onOpen = { onOpenJob(job.id) }, onArchive = { onArchive(job.id) })
+                    JobListCard(job, onOpen = { onOpenJob(job.id) }, onArchive = { onArchive(job.id) }, onCorrect = { onCorrect(job.id) })
                 }
             }
         }
@@ -86,7 +96,7 @@ fun JobListScreen(
 }
 
 @Composable
-private fun JobListCard(job: Job, onOpen: () -> Unit, onArchive: () -> Unit) {
+private fun JobListCard(job: Job, onOpen: () -> Unit, onArchive: () -> Unit, onCorrect: () -> Unit) {
     Card(Modifier.fillMaxWidth().clickable(onClick = onOpen), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -97,6 +107,10 @@ private fun JobListCard(job: Job, onOpen: () -> Unit, onArchive: () -> Unit) {
             }
             Text(job.companyName, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             job.location?.let { Text("⌖  $it", style = MaterialTheme.typography.bodyMedium) }
+            if (!job.rawCapturedText.isNullOrBlank()) {
+                Text(if (job.aiCorrected) "Scraped · AI corrected with Gemini" else "Scraped", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+                OutlinedButton(onClick = onCorrect, modifier = Modifier.padding(top = 2.dp)) { Text(if (job.aiCorrected) "Correct again with AI" else "Correct details with AI") }
+            }
             if (job.status != JobStatus.CLOSED) {
                 OutlinedButton(onClick = onArchive, modifier = Modifier.padding(top = 2.dp)) { Text("Archive") }
             }

@@ -37,7 +37,7 @@ class AppSettingsViewModel @Inject constructor(
     init { viewModelScope.launch { preferences.darkTheme.collect { _state.value = _state.value.copy(darkTheme = it) } } }
     fun setDarkTheme(enabled: Boolean) { viewModelScope.launch { preferences.setDarkTheme(enabled) } }
     fun deleteAll() { _state.value = _state.value.copy(busy = true, message = null); viewModelScope.launch {
-        try { privacy.deleteAll(); _state.value = AppSettingsState(message = "Local jobs, contacts, outreach, templates, resumes, and Gmail credentials were deleted.") }
+        try { privacy.deleteAll(); _state.value = AppSettingsState(message = "Local jobs, contacts, outreach, templates, resumes, and saved provider credentials were deleted.") }
         catch (_: Exception) { _state.value = _state.value.copy(busy = false, message = "Could not delete all local data. Try again.") }
     } }
     fun export(context: Context, uri: Uri) { _state.value = _state.value.copy(busy = true, message = null); viewModelScope.launch {

@@ -43,6 +43,7 @@ import com.saikalyan.jobmate.ui.capture.CaptureRoute
 import com.saikalyan.jobmate.ui.followups.FollowUpRoute
 import com.saikalyan.jobmate.ui.settings.AppSettingsRoute
 import com.saikalyan.jobmate.ui.settings.SheetsSyncRoute
+import com.saikalyan.jobmate.ui.settings.AiSettingsRoute
 import com.saikalyan.jobmate.ui.jobs.JobDetailEvent
 import com.saikalyan.jobmate.ui.jobs.JobDetailScreen
 import com.saikalyan.jobmate.ui.jobs.JobDetailViewModel
@@ -54,7 +55,7 @@ import com.saikalyan.jobmate.ui.jobs.JobListViewModel
 private object Routes {
     const val DASHBOARD = "dashboard"
     const val JOBS = "jobs"
-    const val JOB_DETAIL = "job/{jobId}"
+    const val JOB_DETAIL = "job/{jobId}?correct={correct}"
     const val NEW_JOB = "job-editor/new"
     const val EDIT_JOB = "job-editor/{jobId}"
     const val CONTACTS = "contacts"
@@ -67,6 +68,7 @@ private object Routes {
     const val SETTINGS = "settings"
     const val APP_SETTINGS = "app-settings"
     const val SHEETS_SYNC = "sheets-sync"
+    const val AI_SETTINGS = "ai-settings"
     const val CAPTURE_REVIEW = "capture-review"
 }
 
@@ -88,6 +90,7 @@ private val moreNavItems = listOf(
     NavItem(Routes.SETTINGS, "Gmail settings"),
     NavItem(Routes.APP_SETTINGS, "App settings"),
     NavItem(Routes.SHEETS_SYNC, "Sheets sync"),
+    NavItem(Routes.AI_SETTINGS, "AI correction settings"),
 )
 
 @Composable
@@ -115,13 +118,14 @@ fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
         Routes.SETTINGS -> "Gmail settings"
         Routes.APP_SETTINGS -> "App settings"
         Routes.SHEETS_SYNC -> "Sheets sync"
+        Routes.AI_SETTINGS -> "AI correction settings"
         Routes.NEW_JOB -> "Add a job"
         Routes.EDIT_JOB -> "Edit job"
         Routes.JOB_DETAIL -> "Job details"
         Routes.CONTACT_MATCH -> "Company matches"
         else -> "JobMate"
     }
-    val isNested = route.startsWith("job/") || route.startsWith("job-editor/") || route.startsWith("contacts/")
+    val isNested = route == Routes.AI_SETTINGS || route.startsWith("job/") || route.startsWith("job-editor/") || route.startsWith("contacts/")
 
     Scaffold(
         modifier = modifier,
@@ -177,17 +181,33 @@ fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
                     state = state,
                     onSearch = viewModel::setSearchQuery,
                     onStatusFilter = viewModel::setStatusFilter,
+                    onCaptureFilter = viewModel::setCaptureFilter,
                     onRetry = viewModel::retry,
                     onAddJob = { navController.navigate(Routes.NEW_JOB) },
                     onOpenJob = { id -> navController.navigate("job/$id") },
                     onArchive = viewModel::archive,
+                    onCorrect = { id -> navController.navigate("job/$id?correct=true") },
                 )
             }
-            composable(Routes.JOB_DETAIL, arguments = listOf(navArgument("jobId") { type = NavType.StringType })) { entry ->
+            composable(
+                Routes.JOB_DETAIL,
+                arguments = listOf(
+                    navArgument("jobId") { type = NavType.StringType },
+                    navArgument("correct") { type = NavType.BoolType; defaultValue = false },
+                ),
+            ) { entry ->
                 val viewModel: JobDetailViewModel = hiltViewModel()
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val jobId = entry.arguments?.getString("jobId").orEmpty()
+                val requestedCorrection = entry.arguments?.getBoolean("correct") == true
+                var correctionStarted by remember(jobId) { mutableStateOf(false) }
                 LaunchedEffect(jobId, viewModel) { viewModel.load(jobId) }
+                LaunchedEffect(jobId, state, requestedCorrection) {
+                    if (requestedCorrection && !correctionStarted && state is com.saikalyan.jobmate.ui.jobs.JobDetailUiState.Content) {
+                        correctionStarted = true
+                        viewModel.correctDetails(jobId)
+                    }
+                }
                 LaunchedEffect(viewModel) {
                     viewModel.events.collect { event ->
                         if (event == JobDetailEvent.Exit) navController.popBackStack()
@@ -199,6 +219,7 @@ fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
                     onStatusChange = { viewModel.updateStatus(jobId, it) },
                     onArchive = { viewModel.archive(jobId) },
                     onDelete = { viewModel.delete(jobId) },
+                    onCorrectDetails = { viewModel.correctDetails(jobId) },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -242,6 +263,7 @@ fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
             composable(Routes.SETTINGS) { GmailSettingsRoute() }
             composable(Routes.APP_SETTINGS) { AppSettingsRoute() }
             composable(Routes.SHEETS_SYNC) { SheetsSyncRoute() }
+            composable(Routes.AI_SETTINGS) { AiSettingsRoute() }
             composable(Routes.CAPTURE_REVIEW) { CaptureRoute(sharedText = sharedText) }
         }
     }

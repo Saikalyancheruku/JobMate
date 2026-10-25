@@ -38,7 +38,7 @@ import com.saikalyan.jobmate.data.local.entity.SyncQueueEntity
         SyncQueueEntity::class,
         SyncConflictEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(AppTypeConverters::class)
@@ -68,6 +68,12 @@ abstract class JobMateDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE jobs ADD COLUMN education TEXT")
                 database.execSQL("ALTER TABLE jobs ADD COLUMN rawCapturedText TEXT")
                 database.execSQL("ALTER TABLE jobs ADD COLUMN capturedAt INTEGER")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE jobs ADD COLUMN aiCorrected INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

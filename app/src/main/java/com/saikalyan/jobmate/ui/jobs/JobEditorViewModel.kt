@@ -163,6 +163,7 @@ class JobEditorViewModel @Inject constructor(
             education = form.education.trim().ifEmpty { null },
             rawCapturedText = form.rawCapturedText,
             capturedAt = form.capturedAt,
+            aiCorrected = previous?.aiCorrected ?: false,
             source = form.source.trim().ifEmpty { null },
             sourceUrl = form.sourceUrl.trim().ifEmpty { null },
             status = form.status,

@@ -178,7 +178,7 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
             if (local == null) db.jobDao().upsert(remote)
             else if (remote.updatedAt.isAfter(local.updatedAt)) {
                 // Raw OCR text is deliberately local-only and must survive a sheet pull.
-                db.jobDao().upsert(remote.copy(rawCapturedText = local.rawCapturedText, capturedAt = remote.capturedAt ?: local.capturedAt))
+                db.jobDao().upsert(remote.copy(rawCapturedText = local.rawCapturedText, capturedAt = remote.capturedAt ?: local.capturedAt, aiCorrected = local.aiCorrected))
             }
         }
     }

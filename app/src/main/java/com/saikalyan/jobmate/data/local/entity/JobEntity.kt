@@ -47,4 +47,5 @@ data class JobEntity(
     val education: String? = null,
     val rawCapturedText: String? = null,
     val capturedAt: Instant? = null,
+    val aiCorrected: Boolean = false,
 )
