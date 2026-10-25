@@ -1,7 +1,7 @@
 # JobMate project implementation status
 
 **Last updated:** 2026-10-25
-**Overall status:** Source implementation through Phase 9 is recorded. The outreach core was extended with encrypted user-profile input, on-demand AI email drafting, company contact matching/manual selection, manual follow-up drafts, and resume attachment statements. AI Settings keyboard/header layout was also adjusted. Phase 10 delivery remains incomplete. The app has not passed a full build, current CI run, or verification of this new source on-device.
+**Overall status:** Source implementation through Phase 9 is recorded. The outreach core was extended with encrypted user-profile input, on-demand AI email drafting, company contact matching/manual selection, manual follow-up drafts, and resume attachment statements. AI Settings keyboard/header layout was adjusted. The latest supplied Actions run failed at Kotlin compilation because a Compose IME visibility API was unavailable; source now uses IME inset height, but CI has not rerun. Phase 10 delivery remains incomplete and no device verification is recorded for these changes.
 
 **Build compatibility update:** application `compileSdk` is 37 to address dependency AAR metadata requirements; `targetSdk` remains 36 and `minSdk` remains 26. CI requests SDK package `platforms;android-37.0` and Build Tools 37.0.0. The change is pending a successful CI run.
 

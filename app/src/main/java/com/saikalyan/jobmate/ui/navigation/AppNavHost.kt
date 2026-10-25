@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -104,6 +105,8 @@ private val moreNavItems = listOf(
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
+    val density = LocalDensity.current
+    val isImeVisible = WindowInsets.ime.getBottom(density) > 0
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -157,7 +160,7 @@ fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
             )
         },
         bottomBar = {
-            if (!(route == Routes.AI_SETTINGS && WindowInsets.isImeVisible)) {
+            if (!(route == Routes.AI_SETTINGS && isImeVisible)) {
                 NavigationBar {
                     primaryNavItems.forEach { item ->
                         NavigationBarItem(
