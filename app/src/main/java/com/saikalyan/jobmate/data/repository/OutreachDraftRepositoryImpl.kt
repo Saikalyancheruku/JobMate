@@ -50,6 +50,10 @@ class OutreachDraftRepositoryImpl @Inject constructor(
                 renderedBody = draft.body,
                 status = "DRAFT",
                 sentAt = null,
+                messageKind = draft.messageKind,
+                parentOutreachId = draft.parentOutreachId,
+                nextFollowUpAt = draft.nextFollowUpAt,
+                followUpCount = draft.followUpCount,
                 createdAt = draft.createdAt,
                 updatedAt = draft.updatedAt,
             )
@@ -60,6 +64,43 @@ class OutreachDraftRepositoryImpl @Inject constructor(
     } catch (_: Exception) {
         RepositoryResult.Failure(RepositoryError.Storage)
     }
+
+    override suspend fun prepareFollowUp(sourceId: String, draft: OutreachDraft): RepositoryResult<Unit> = try {
+        val source = dao.findById(sourceId) ?: return RepositoryResult.Failure(RepositoryError.NotFound)
+        if (source.status != "SENT" || source.nextFollowUpAt == null) {
+            return RepositoryResult.Failure(RepositoryError.Conflict)
+        }
+        val inserted = dao.prepareFollowUp(sourceId, draft.toEntity(), draft.createdAt)
+        if (inserted) RepositoryResult.Success(Unit) else RepositoryResult.Failure(RepositoryError.Conflict)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        RepositoryResult.Failure(RepositoryError.Storage)
+    }
+
+    private fun OutreachDraft.toEntity() = OutreachEntity(
+        id = id,
+        jobId = jobId,
+        contactId = contactId,
+        templateId = templateId,
+        resumeId = resumeId,
+        recipientNameSnapshot = recipientName,
+        recipientEmailSnapshot = recipientEmail,
+        jobTitleSnapshot = jobTitle,
+        companyNameSnapshot = companyName,
+        templateNameSnapshot = templateName,
+        resumeDisplayNameSnapshot = resumeDisplayName,
+        renderedSubject = subject,
+        renderedBody = body,
+        status = "DRAFT",
+        sentAt = null,
+        messageKind = messageKind,
+        parentOutreachId = parentOutreachId,
+        nextFollowUpAt = null,
+        followUpCount = followUpCount,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+    )
 
     private fun OutreachEntity.toDomain() = OutreachDraft(
         id = id,
@@ -76,6 +117,10 @@ class OutreachDraftRepositoryImpl @Inject constructor(
         subject = renderedSubject,
         body = renderedBody,
         status = status,
+        messageKind = messageKind,
+        parentOutreachId = parentOutreachId,
+        nextFollowUpAt = nextFollowUpAt,
+        followUpCount = followUpCount,
         createdAt = createdAt,
         updatedAt = updatedAt,
     )

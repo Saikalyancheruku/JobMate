@@ -117,6 +117,9 @@ private fun DashboardContent(
             }
         }
         item {
+            SummaryCard("Email follow-ups due", summary.dueEmailFollowUps, Modifier.fillMaxWidth())
+        }
+        item {
             Text("Recently saved", style = MaterialTheme.typography.titleLarge)
             if (summary.recentJobs.isEmpty()) {
                 Card {

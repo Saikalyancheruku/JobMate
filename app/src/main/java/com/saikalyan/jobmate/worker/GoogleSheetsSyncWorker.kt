@@ -59,6 +59,10 @@ class GoogleSheetsSyncWorker(context: Context, params: WorkerParameters) : Corou
                 prefs.saveSheet(created.id, created.url)
                 created.id
             }
+            if (!api.hasRequiredTabs(token, spreadsheetId)) {
+                prefs.recordError("The selected spreadsheet must contain tabs named Jobs and Contacts. Choose another sheet or create a new one.")
+                return@withContext Result.failure()
+            }
             api.ensureJobHeaders(token, spreadsheetId)
             val remoteJobs = api.readRows(token, spreadsheetId, GoogleSheetsClient.JOBS_TAB).associateBy { it.id }.toMutableMap()
             val remoteContacts = api.readRows(token, spreadsheetId, GoogleSheetsClient.CONTACTS_TAB).associateBy { it.id }.toMutableMap()

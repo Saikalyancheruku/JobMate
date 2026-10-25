@@ -36,6 +36,7 @@ class SheetsSyncPreferences @Inject constructor(@ApplicationContext context: Con
     suspend fun enable() { store.edit { it[ENABLED] = true; it[AUTH_REQUIRED] = false; it.remove(LAST_ERROR) } }
     suspend fun requireAuthorization() { store.edit { it[AUTH_REQUIRED] = true; it[LAST_ERROR] = "Google authorization needs your attention. Reconnect to resume sync." } }
     suspend fun saveSheet(id: String, url: String) { store.edit { it[SHEET_ID] = id; it[SHEET_URL] = url; it[ENABLED] = true; it[AUTH_REQUIRED] = false; it.remove(LAST_ERROR) } }
+    suspend fun clearSheetReference() { store.edit { it.remove(SHEET_ID); it.remove(SHEET_URL) } }
     suspend fun recordError(message: String) { store.edit { it[LAST_ERROR] = message } }
     suspend fun setEnabled(value: Boolean) { store.edit { it[ENABLED] = value } }
     suspend fun disconnect() = mutex.withLock { store.edit { it.clear() } }

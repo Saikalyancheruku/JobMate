@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Clock
 import java.util.UUID
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -83,7 +84,8 @@ class OutreachSendRepositoryImpl @Inject constructor(
                         SmtpResult.Sent -> {
                             val ended = clock.instant()
                             attemptDao.upsert(attempt.copy(endedAt = ended, outcome = "SENT"))
-                            outreachDao.updateStatus(outreachId, "SENT", ended, ended)
+                            val nextDue = ended.atZone(ZoneId.systemDefault()).plusDays(2).toInstant()
+                            outreachDao.updateSendState(outreachId, "SENT", ended, nextDue, ended)
                             RepositoryResult.Success(OutreachSendResult.Sent)
                         }
                         is SmtpResult.Failed -> {

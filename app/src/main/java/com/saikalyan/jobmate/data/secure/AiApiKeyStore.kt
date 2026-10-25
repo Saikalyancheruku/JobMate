@@ -33,6 +33,34 @@ class AiApiKeyStore @Inject constructor(@ApplicationContext context: Context) {
 
     val provider: Flow<String?> = store.data.map { it[PROVIDER] }
 
+    suspend fun saveProfile(profile: String) = withContext(Dispatchers.IO) {
+        require(profile.length <= 8_000) { "Profile must be 8,000 characters or fewer." }
+        if (profile.isBlank()) {
+            store.edit { it.remove(ENCRYPTED_PROFILE) }
+            return@withContext
+        }
+        val clear = profile.trim().toByteArray(Charsets.UTF_8)
+        val payload = try {
+            val cipher = Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, key()) }
+            cipher.iv + cipher.doFinal(clear)
+        } finally { clear.fill(0) }
+        try {
+            store.edit { it[ENCRYPTED_PROFILE] = Base64.encodeToString(payload, Base64.NO_WRAP) }
+        } finally { payload.fill(0) }
+    }
+
+    suspend fun readProfile(): String? = withContext(Dispatchers.IO) {
+        val encoded = store.data.first()[ENCRYPTED_PROFILE] ?: return@withContext null
+        val payload = Base64.decode(encoded, Base64.NO_WRAP)
+        require(payload.size > IV_SIZE) { "Saved profile data is incomplete." }
+        try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, payload, 0, IV_SIZE))
+            val clear = cipher.doFinal(payload, IV_SIZE, payload.size - IV_SIZE)
+            try { clear.toString(Charsets.UTF_8) } finally { clear.fill(0) }
+        } finally { payload.fill(0) }
+    }
+
     suspend fun save(provider: String, apiKey: String) = withContext(Dispatchers.IO) {
         require(provider in SUPPORTED_PROVIDERS) { "Choose a supported AI provider." }
         require(apiKey.isNotBlank()) { "API key is required." }
@@ -63,8 +91,7 @@ class AiApiKeyStore @Inject constructor(@ApplicationContext context: Context) {
 
     suspend fun clear() = withContext(Dispatchers.IO) {
         store.edit { it.remove(PROVIDER); it.remove(ENCRYPTED_KEY) }
-        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        if (ks.containsAlias(KEY_ALIAS)) ks.deleteEntry(KEY_ALIAS)
+        // Keep the AES key because the separately stored profile uses the same key alias.
     }
 
     private fun key(): SecretKey {
@@ -86,6 +113,7 @@ class AiApiKeyStore @Inject constructor(@ApplicationContext context: Context) {
         const val IV_SIZE = 12
         val PROVIDER = stringPreferencesKey("ai_provider")
         val ENCRYPTED_KEY = stringPreferencesKey("encrypted_ai_api_key")
+        val ENCRYPTED_PROFILE = stringPreferencesKey("encrypted_ai_profile")
         val SUPPORTED_PROVIDERS = setOf("Gemini")
     }
 }

@@ -18,8 +18,29 @@ class AiSettingsViewModel @Inject constructor(private val store: AiApiKeyStore) 
     val message = _message.asStateFlow()
     private val _busy = MutableStateFlow(false)
     val busy = _busy.asStateFlow()
+    private val _profile = MutableStateFlow("")
+    val profile = _profile.asStateFlow()
 
-    init { viewModelScope.launch { store.provider.collect { _provider.value = it } } }
+    init {
+        viewModelScope.launch { store.provider.collect { _provider.value = it } }
+        viewModelScope.launch { _profile.value = runCatching { store.readProfile().orEmpty() }.getOrDefault("") }
+    }
+
+    fun setProfile(value: String) { _profile.value = value.take(8_000) }
+
+    fun saveProfile() {
+        if (_busy.value) return
+        _busy.value = true
+        _message.value = null
+        viewModelScope.launch {
+            try {
+                store.saveProfile(_profile.value)
+                _message.value = "Personal profile encrypted and saved on this device."
+            } catch (_: Exception) {
+                _message.value = "Could not save the profile securely."
+            } finally { _busy.value = false }
+        }
+    }
 
     fun save(provider: String, key: String) {
         if (_busy.value) return

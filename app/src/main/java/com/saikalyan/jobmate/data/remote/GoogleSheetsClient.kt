@@ -69,6 +69,19 @@ class GoogleSheetsClient @Inject constructor() {
         request("PUT", "$SHEETS_BASE/spreadsheets/$spreadsheetId/values/$range?valueInputOption=RAW", accessToken, body.toString())
     }
 
+    fun hasRequiredTabs(accessToken: String, spreadsheetId: String): Boolean {
+        val metadata = JSONObject(request(
+            "GET",
+            "$SHEETS_BASE/spreadsheets/$spreadsheetId?fields=sheets.properties.title",
+            accessToken,
+        ))
+        val sheets = metadata.optJSONArray("sheets") ?: return false
+        val titles = (0 until sheets.length()).mapNotNull { index ->
+            sheets.optJSONObject(index)?.optJSONObject("properties")?.optString("title")
+        }.toSet()
+        return JOBS_TAB in titles && CONTACTS_TAB in titles
+    }
+
     private fun headerData(range: String, headers: List<String>) = JSONObject().put("range", range)
         .put("majorDimension", "ROWS").put("values", JSONArray().put(JSONArray(headers)))
 

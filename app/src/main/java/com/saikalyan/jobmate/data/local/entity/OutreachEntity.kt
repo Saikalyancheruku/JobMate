@@ -1,6 +1,7 @@
 package com.saikalyan.jobmate.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -33,6 +34,12 @@ import java.time.Instant
             childColumns = ["resumeId"],
             onDelete = ForeignKey.SET_NULL,
         ),
+        ForeignKey(
+            entity = OutreachEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["parentOutreachId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
     indices = [
         Index(value = ["jobId"]),
@@ -40,6 +47,8 @@ import java.time.Instant
         Index(value = ["templateId"]),
         Index(value = ["resumeId"]),
         Index(value = ["status", "sentAt"]),
+        Index(value = ["nextFollowUpAt"]),
+        Index(value = ["parentOutreachId"]),
     ],
 )
 data class OutreachEntity(
@@ -58,6 +67,10 @@ data class OutreachEntity(
     val renderedBody: String,
     val status: String,
     val sentAt: Instant?,
+    @ColumnInfo(defaultValue = "'INITIAL'") val messageKind: String = "INITIAL",
+    val parentOutreachId: String? = null,
+    val nextFollowUpAt: Instant? = null,
+    @ColumnInfo(defaultValue = "0") val followUpCount: Int = 0,
     val createdAt: Instant,
     val updatedAt: Instant,
 )

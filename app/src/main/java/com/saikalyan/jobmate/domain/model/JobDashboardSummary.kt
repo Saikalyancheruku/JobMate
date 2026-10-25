@@ -4,6 +4,7 @@ package com.saikalyan.jobmate.domain.model
 data class JobDashboardSummary(
     val statusCounts: Map<JobStatus, Int> = emptyMap(),
     val recentJobs: List<Job> = emptyList(),
+    val dueEmailFollowUps: Int = 0,
 ) {
     val totalJobs: Int
         get() = statusCounts.values.sum()

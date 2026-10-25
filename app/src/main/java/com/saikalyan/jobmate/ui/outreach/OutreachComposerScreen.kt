@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,12 +41,18 @@ fun OutreachComposerRoute(viewModel: OutreachViewModel = hiltViewModel()) {
         state = state,
         onJob = viewModel::selectJob,
         onContact = viewModel::toggleContact,
+        visibleContacts = viewModel.visibleContacts(),
+        onCompanyMatchesOnly = viewModel::showCompanyMatches,
+        onContactSearch = viewModel::setContactSearch,
         onTemplate = viewModel::selectTemplate,
         onResume = viewModel::selectResume,
         onSender = viewModel::setSenderName,
         onSubject = viewModel::setSubject,
         onBody = viewModel::setBody,
         onSaveDrafts = viewModel::saveDrafts,
+        onGenerateAi = viewModel::generateAiDraft,
+        onSendAllDrafts = viewModel::sendAllDraftsForJob,
+        onPrepareFollowUp = viewModel::prepareFollowUp,
         onSendDraft = viewModel::sendDraft,
         onClearUnknownRetry = viewModel::clearUnknownRetry,
     )
@@ -56,18 +63,25 @@ fun OutreachComposerScreen(
     state: OutreachComposerUiState,
     onJob: (String?) -> Unit,
     onContact: (String) -> Unit,
+    visibleContacts: List<com.saikalyan.jobmate.domain.model.Contact>,
+    onCompanyMatchesOnly: (Boolean) -> Unit,
+    onContactSearch: (String) -> Unit,
     onTemplate: (String?) -> Unit,
     onResume: (String?) -> Unit,
     onSender: (String) -> Unit,
     onSubject: (String) -> Unit,
     onBody: (String) -> Unit,
     onSaveDrafts: () -> Unit,
+    onGenerateAi: () -> Unit,
+    onSendAllDrafts: (String) -> Unit,
+    onPrepareFollowUp: (String) -> Unit,
     onSendDraft: (String, Boolean) -> Unit,
     onClearUnknownRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var confirmSave by remember { mutableStateOf(false) }
     var sendTarget by remember { mutableStateOf<OutreachDraft?>(null) }
+    var batchJobTarget by remember { mutableStateOf<String?>(null) }
     if (confirmSave) AlertDialog(
         onDismissRequest = { confirmSave = false },
         title = { Text("Save outreach drafts?") },
@@ -90,14 +104,44 @@ fun OutreachComposerScreen(
         confirmButton = { TextButton(onClick = { onClearUnknownRetry(); onSendDraft(unknownDraft.id, true) }) { Text("I verified; retry") } },
         dismissButton = { TextButton(onClick = onClearUnknownRetry) { Text("Cancel") } },
     )
+    val batchDrafts = batchJobTarget?.let { jobId ->
+        state.drafts.filter { it.jobId == jobId && it.status == "DRAFT" && it.recipientEmail.isNotBlank() }
+    }.orEmpty()
+    if (batchJobTarget != null) AlertDialog(
+        onDismissRequest = { batchJobTarget = null },
+        title = { Text("Send ${batchDrafts.size} separate emails?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Review the recipient-specific previews below. Confirming sends one separate message to each listed contact. Failed or uncertain deliveries will be reported; uncertain messages will not be retried automatically.")
+                batchDrafts.take(12).forEach { draft ->
+                    Text("${draft.recipientName} <${draft.recipientEmail}> · ${draft.templateName ?: draft.messageKind}", style = MaterialTheme.typography.bodySmall)
+                    Text(draft.subject, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                if (batchDrafts.size > 12) Text("And ${batchDrafts.size - 12} more ready drafts.")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val jobId = batchJobTarget
+                batchJobTarget = null
+                if (jobId != null) onSendAllDrafts(jobId)
+            }, enabled = batchDrafts.isNotEmpty() && !state.isSendingBatch) { Text("Send these emails") }
+        },
+        dismissButton = { TextButton(onClick = { batchJobTarget = null }) { Text("Cancel") } },
+    )
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Outreach composer", style = MaterialTheme.typography.headlineMedium)
         Text("Preview each recipient separately. Saving creates local drafts; sending always requires an explicit confirmation.")
         ChoiceMenu("Choose job", state.jobs.map { it.id to "${it.title} · ${it.companyName}" }, state.jobId, onJob)
         Text("Recipients", style = MaterialTheme.typography.titleMedium)
+        OutlinedButton(onClick = { onCompanyMatchesOnly(!state.companyMatchesOnly) }, enabled = state.jobId != null) {
+            Text(if (state.companyMatchesOnly) "Show all contacts" else "Show matching company contacts")
+        }
+        OutlinedTextField(state.contactSearch, onContactSearch, label = { Text("Search contacts by name, company, or email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Text("Company matches are shown first. Search narrows the list (up to 60 displayed). Select recipients manually; no message is sent automatically.", style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            state.contacts.forEach { contact ->
+            visibleContacts.forEach { contact ->
                 FilterChip(
                     selected = contact.id in state.contactIds,
                     onClick = { onContact(contact.id) },
@@ -107,9 +151,14 @@ fun OutreachComposerScreen(
             }
         }
         ChoiceMenu("Choose template", state.templates.map { it.id to it.name }, state.templateId, onTemplate)
+        OutlinedButton(onClick = onGenerateAi, enabled = state.jobId != null && !state.isGenerating, modifier = Modifier.fillMaxWidth()) {
+            Text(if (state.isGenerating) "Generating AI draft…" else "Draft referral email with AI")
+        }
+        Text("Gemini receives the selected job and your saved profile. Contact-specific values are inserted locally in each preview.", style = MaterialTheme.typography.bodySmall)
         ChoiceMenu("Optional resume", listOf("" to "No resume") + state.resumes.map { it.id to it.displayName }, state.resumeId.orEmpty()) {
             onResume(it?.ifBlank { null })
         }
+        if (state.resumeId != null) Text("The selected PDF will be attached to each email, and the draft will say it is attached.", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(state.senderName, onSender, label = { Text("Your name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(state.subject, onSubject, label = { Text("Subject") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(state.body, onBody, label = { Text("Message body") }, modifier = Modifier.fillMaxWidth(), minLines = 5)
@@ -136,18 +185,33 @@ fun OutreachComposerScreen(
         state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
         Button(
             onClick = { confirmSave = true },
-            enabled = !state.isSaving && state.previews.isNotEmpty() && state.previews.all { it.result is TemplateRenderResult.Rendered },
+            enabled = !state.isSaving && state.previews.isNotEmpty() && state.subject.isNotBlank() && state.body.isNotBlank() && state.previews.all { it.result is TemplateRenderResult.Rendered },
         ) { Text(if (state.isSaving) "Saving…" else "Review and save drafts") }
         Text("Outreach history and drafts (${state.drafts.size})", style = MaterialTheme.typography.titleLarge)
-        state.drafts.take(20).forEach { draft ->
+        val activeJobId = state.jobId
+        val readyForJob = state.drafts.count { it.jobId == activeJobId && it.status == "DRAFT" && it.recipientEmail.isNotBlank() }
+        if (activeJobId != null && readyForJob > 0) {
+            OutlinedButton(
+                onClick = { batchJobTarget = activeJobId },
+                enabled = !state.isSendingBatch && state.sendingDraftId == null,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (state.isSendingBatch) "Sending separate emails…" else "Send all ready emails for this job ($readyForJob)") }
+        }
+        state.drafts.take(100).forEach { draft ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("${draft.recipientName} · ${draft.jobTitle.orEmpty()} · ${draft.subject}")
                     Text("${draft.recipientEmail} · ${draft.status}", style = MaterialTheme.typography.bodySmall)
+                    if (draft.status == "DRAFT") Text(draft.body, maxLines = 4, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                    if (draft.status == "SENT" && draft.nextFollowUpAt != null && draft.nextFollowUpAt <= java.time.Instant.now()) {
+                        Text("Follow-up due", color = MaterialTheme.colorScheme.error)
+                        OutlinedButton(onClick = { onPrepareFollowUp(draft.id) }) { Text("Prepare follow-up") }
+                    }
+                    if (draft.messageKind == "FOLLOW_UP") Text("Follow-up ${draft.followUpCount}", style = MaterialTheme.typography.labelSmall)
                     if (draft.status != "SENT") {
                         OutlinedButton(
                             onClick = { sendTarget = draft },
-                            enabled = state.sendingDraftId == null,
+                            enabled = state.sendingDraftId == null && !state.isSendingBatch,
                         ) { Text(if (state.sendingDraftId == draft.id) "Sending…" else if (draft.status == "UNKNOWN") "Review and retry" else "Send this recipient") }
                     }
                 }

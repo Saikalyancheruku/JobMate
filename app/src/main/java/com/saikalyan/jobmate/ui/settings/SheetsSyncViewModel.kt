@@ -44,7 +44,14 @@ class SheetsSyncViewModel @Inject constructor(
         viewModelScope.launch { conflictsDao.observeUnresolved().collect { _state.value = _state.value.copy(conflicts = it) } }
     }
 
-    fun onAuthorized() { viewModelScope.launch {
+    fun onAuthorized(existingSpreadsheetId: String? = null, createNewSpreadsheet: Boolean = false) { viewModelScope.launch {
+        when {
+            !existingSpreadsheetId.isNullOrBlank() -> preferences.saveSheet(
+                existingSpreadsheetId,
+                "https://docs.google.com/spreadsheets/d/$existingSpreadsheetId",
+            )
+            createNewSpreadsheet -> preferences.clearSheetReference()
+        }
         preferences.enable()
         // The worker reads and reconciles the Sheet before queuing local-only/newer rows.
         // Enqueuing every local row here made the local database overwrite Sheet edits

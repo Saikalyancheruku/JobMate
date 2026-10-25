@@ -24,8 +24,21 @@ interface OutreachDao {
     @Transaction
     suspend fun saveDraftsAtomically(outreach: List<OutreachEntity>) = upsertAll(outreach)
 
+    @Transaction
+    suspend fun prepareFollowUp(sourceId: String, draft: OutreachEntity, updatedAt: java.time.Instant): Boolean {
+        if (clearFollowUpDue(sourceId, updatedAt) != 1) return false
+        upsert(draft)
+        return true
+    }
+
     @Query("UPDATE outreach SET status = :status, sentAt = :sentAt, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateStatus(id: String, status: String, sentAt: java.time.Instant?, updatedAt: java.time.Instant): Int
+
+    @Query("UPDATE outreach SET status = :status, sentAt = :sentAt, nextFollowUpAt = :nextFollowUpAt, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateSendState(id: String, status: String, sentAt: java.time.Instant?, nextFollowUpAt: java.time.Instant?, updatedAt: java.time.Instant): Int
+
+    @Query("UPDATE outreach SET nextFollowUpAt = NULL, updatedAt = :updatedAt WHERE id = :id AND status = 'SENT' AND nextFollowUpAt <= :updatedAt")
+    suspend fun clearFollowUpDue(id: String, updatedAt: java.time.Instant): Int
 
     @Query("DELETE FROM outreach WHERE id = :id")
     suspend fun deleteById(id: String): Int

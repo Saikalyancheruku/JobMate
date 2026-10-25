@@ -17,6 +17,10 @@ data class OutreachDraft(
     val subject: String,
     val body: String,
     val status: String = "DRAFT",
+    val messageKind: String = "INITIAL",
+    val parentOutreachId: String? = null,
+    val nextFollowUpAt: Instant? = null,
+    val followUpCount: Int = 0,
     val createdAt: Instant,
     val updatedAt: Instant,
 )

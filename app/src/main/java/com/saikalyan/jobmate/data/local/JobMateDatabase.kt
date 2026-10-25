@@ -38,7 +38,7 @@ import com.saikalyan.jobmate.data.local.entity.SyncQueueEntity
         SyncQueueEntity::class,
         SyncConflictEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(AppTypeConverters::class)
@@ -74,6 +74,17 @@ abstract class JobMateDatabase : RoomDatabase() {
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE jobs ADD COLUMN aiCorrected INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE outreach ADD COLUMN messageKind TEXT NOT NULL DEFAULT 'INITIAL'")
+                database.execSQL("ALTER TABLE outreach ADD COLUMN parentOutreachId TEXT REFERENCES outreach(id) ON DELETE SET NULL")
+                database.execSQL("ALTER TABLE outreach ADD COLUMN nextFollowUpAt INTEGER")
+                database.execSQL("ALTER TABLE outreach ADD COLUMN followUpCount INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_outreach_nextFollowUpAt ON outreach(nextFollowUpAt)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_outreach_parentOutreachId ON outreach(parentOutreachId)")
             }
         }
     }

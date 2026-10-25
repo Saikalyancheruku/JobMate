@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +17,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,14 +44,26 @@ fun SheetsSyncRoute(viewModel: SheetsSyncViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pendingDisconnect by remember { mutableStateOf(false) }
+    var pendingSpreadsheetId by remember { mutableStateOf<String?>(null) }
+    var pendingCreateNew by remember { mutableStateOf(false) }
+    var existingSheetLink by remember { mutableStateOf("") }
+    var sheetLinkError by remember { mutableStateOf<String?>(null) }
+    var showDestinationOptions by remember { mutableStateOf(false) }
     val authLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
             runCatching { Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(result.data!!) }
-                .onSuccess { authorization -> if (!authorization.accessToken.isNullOrBlank()) viewModel.onAuthorized() }
+                .onSuccess { authorization ->
+                    if (!authorization.accessToken.isNullOrBlank()) {
+                        viewModel.onAuthorized(pendingSpreadsheetId, pendingCreateNew)
+                        showDestinationOptions = false
+                    }
+                }
                 .onFailure { viewModel.setError("Google authorization did not complete. Try connecting again.") }
         }
     }
-    fun connect() {
+    fun connect(existingId: String? = null, createNew: Boolean = false) {
+        pendingSpreadsheetId = existingId
+        pendingCreateNew = createNew
         val request = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(GoogleSheetsSyncWorker.DRIVE_FILE_SCOPE))).build()
         Identity.getAuthorizationClient(context).authorize(request)
             .addOnSuccessListener { authorization ->
@@ -57,23 +71,45 @@ fun SheetsSyncRoute(viewModel: SheetsSyncViewModel = hiltViewModel()) {
                     val pendingIntent = authorization.pendingIntent
                     if (pendingIntent != null) authLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
                     else viewModel.setError("Google did not return an authorization prompt.")
-                } else if (!authorization.accessToken.isNullOrBlank()) viewModel.onAuthorized()
+                } else if (!authorization.accessToken.isNullOrBlank()) {
+                    viewModel.onAuthorized(existingId, createNew)
+                    showDestinationOptions = false
+                }
                 else viewModel.setError("Google did not grant access to the sync spreadsheet.")
             }
             .addOnFailureListener { viewModel.setError("Google authorization could not start. Check Google Play services and try again.") }
     }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Google Sheets sync")
-        Text("JobMate creates a spreadsheet named JobMate Sync with Jobs and Contacts tabs. Sync includes structured job/contact fields only. App Passwords, outreach drafts, resumes, and screenshots are never uploaded. The app requests the narrow drive.file scope for files it creates.")
+        Text("Sync includes structured job/contact fields only. App Passwords, outreach drafts, resumes, and screenshots are never uploaded. Google access uses the narrow drive.file scope.")
         Text("Editing a row in Sheets? Update its updatedAt cell to an ISO-8601 timestamp. Sync uses stable IDs and timestamps to detect concurrent edits.")
-        if (!state.connection.enabled) Button(onClick = ::connect) { Text("Connect Google and create spreadsheet") }
+        if (!state.connection.enabled || showDestinationOptions) {
+            Text("Choose a spreadsheet")
+            Button(onClick = { connect(createNew = true) }) { Text("Connect Google and create a new sheet") }
+            OutlinedTextField(
+                value = existingSheetLink,
+                onValueChange = { existingSheetLink = it; sheetLinkError = null },
+                label = { Text("Existing JobMate Sheet URL or ID") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            sheetLinkError?.let { Text(it) }
+            OutlinedButton(onClick = {
+                val id = extractSpreadsheetId(existingSheetLink)
+                if (id == null) sheetLinkError = "Paste a valid Google Sheets link or spreadsheet ID."
+                else connect(existingId = id)
+            }) { Text("Connect existing sheet") }
+            if (state.connection.enabled) TextButton(onClick = { showDestinationOptions = false }) { Text("Cancel") }
+            Text("The existing sheet must be accessible to this JobMate app and contain tabs named Jobs and Contacts.")
+        }
         else {
             Text("Sync is enabled")
             state.connection.spreadsheetUrl?.let { url ->
                 OutlinedButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }) { Text("Open JobMate Sync") }
             }
-            if (state.connection.authRequired) Button(onClick = ::connect) { Text("Reconnect Google account") }
+            if (state.connection.authRequired) Button(onClick = { connect() }) { Text("Reconnect Google account") }
             OutlinedButton(onClick = viewModel::syncNow) { Text("Sync now") }
+            OutlinedButton(onClick = { showDestinationOptions = true }) { Text("Change spreadsheet") }
             OutlinedButton(onClick = { pendingDisconnect = true }) { Text("Disconnect Google") }
         }
         state.connection.lastError?.let { Text(it) }
@@ -108,6 +144,17 @@ fun SheetsSyncRoute(viewModel: SheetsSyncViewModel = hiltViewModel()) {
         }) { Text("Disconnect") } },
         dismissButton = { TextButton(onClick = { pendingDisconnect = false }) { Text("Cancel") } },
     )
+}
+
+private fun extractSpreadsheetId(input: String): String? {
+    val value = input.trim()
+    val id = if (value.startsWith("https://docs.google.com/spreadsheets/", ignoreCase = true)) {
+        val marker = "/d/"
+        val start = value.indexOf(marker, ignoreCase = true)
+        if (start < 0) return null
+        value.substring(start + marker.length).substringBefore('/').substringBefore('?').substringBefore('#')
+    } else value
+    return id.takeIf { it.matches(Regex("[A-Za-z0-9_-]{20,}")) }
 }
 
 private fun snapshotLabel(json: String, type: String): String = runCatching {

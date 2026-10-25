@@ -65,7 +65,7 @@ fun TemplateListScreen(
             Text("Email templates", style = MaterialTheme.typography.headlineMedium)
             Button(onClick = { adding = true }) { Text("New template") }
         }
-        Text("Supported placeholders: {{firstName}}, {{companyName}}, {{jobTitle}}, {{jobUrl}}, {{senderName}}")
+        Text("Supported placeholders: {{firstName}}, {{contactName}}, {{contactEmail}}, {{contactCompany}}, {{companyName}}, {{jobTitle}}, {{jobUrl}}, {{senderName}}")
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         when {
             state.loading -> CircularProgressIndicator()

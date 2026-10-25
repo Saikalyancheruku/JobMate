@@ -32,6 +32,9 @@ fun AiSettingsScreen(
     busy: Boolean,
     onSave: (provider: String, apiKey: String) -> Unit,
     onClear: () -> Unit,
+    profile: String,
+    onProfileChange: (String) -> Unit,
+    onSaveProfile: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val provider = "Gemini"
@@ -40,7 +43,7 @@ fun AiSettingsScreen(
 
     Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("AI field correction", style = MaterialTheme.typography.headlineMedium)
-        Text("Save your Gemini API key once. JobMate will use it only when you request correction for a captured job.")
+        Text("Save your Gemini API key once. JobMate uses it only when you request captured-job correction or an outreach draft.")
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Provider: Google Gemini", style = MaterialTheme.typography.titleMedium)
@@ -66,7 +69,23 @@ fun AiSettingsScreen(
                 message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             }
         }
-        Text("Your key is stored encrypted on this device. When you tap Correct details, only the saved raw OCR text for that job is sent to Google over HTTPS; screen images are not uploaded. Google says free-tier Gemini API content may be used to improve its products, so avoid sending text you consider sensitive.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Your profile for referral emails", style = MaterialTheme.typography.titleMedium)
+                Text("Add your experience, skills, and a short professional summary. Gemini uses this with the selected job to draft reusable email text; recipient names are filled in separately on this device.")
+                OutlinedTextField(
+                    value = profile,
+                    onValueChange = onProfileChange,
+                    label = { Text("Professional summary and skills") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4,
+                    maxLines = 10,
+                    supportingText = { Text("${profile.length}/8000 characters") },
+                )
+                Button(onClick = onSaveProfile, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Save profile") }
+            }
+        }
+        Text("Your API key and profile are encrypted on this device. When requested, JobMate sends the selected job details and saved profile to Google over HTTPS for a referral email draft; for OCR correction it sends the job's raw OCR text. Screen images and contact data are not sent to Gemini. Google may process submitted text under the terms for your API plan, so do not include information you do not want to share.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -75,5 +94,6 @@ fun AiSettingsRoute(viewModel: AiSettingsViewModel = hiltViewModel()) {
     val provider by viewModel.provider.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
-    AiSettingsScreen(provider, message, busy, viewModel::save, viewModel::clear)
+    val profile by viewModel.profile.collectAsStateWithLifecycle()
+    AiSettingsScreen(provider, message, busy, viewModel::save, viewModel::clear, profile, viewModel::setProfile, viewModel::saveProfile)
 }

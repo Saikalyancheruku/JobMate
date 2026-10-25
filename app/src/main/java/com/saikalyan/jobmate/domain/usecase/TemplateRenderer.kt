@@ -32,6 +32,6 @@ class TemplateRenderer @Inject constructor() {
 
     private companion object {
         val PLACEHOLDER = Regex("\\{\\{([^{}]*)\\}\\}")
-        val ALLOWED = setOf("firstName", "companyName", "jobTitle", "jobUrl", "senderName")
+        val ALLOWED = setOf("firstName", "contactName", "contactEmail", "contactCompany", "companyName", "jobTitle", "jobUrl", "senderName")
     }
 }
