@@ -38,26 +38,16 @@ class CaptureViewModel @Inject constructor(
 ) : ViewModel() {
     private val parser = JobFieldParser()
     private var activeCaptureJob: Job? = null
+    private var handledJobGeneration = controller.jobGeneration.value
     private val _state = MutableStateFlow(CaptureUiState())
     val state = _state.asStateFlow()
 
     init {
         viewModelScope.launch { controller.state.collect { _state.value = _state.value.copy(session = it) } }
-        viewModelScope.launch {
-            controller.finishJobRequests.collect {
-                val finishedTitle = activeCaptureJob?.title
-                activeCaptureJob = null
-                _state.value = _state.value.copy(
-                    message = if (finishedTitle.isNullOrBlank()) {
-                        "Ready for a job. The next capture starts a new job."
-                    } else {
-                        "Finished $finishedTitle. The next capture starts a new job."
-                    },
-                )
-            }
-        }
+        viewModelScope.launch { controller.jobGeneration.collect(::applyJobBoundary) }
         viewModelScope.launch {
             controller.sections.collect { section ->
+                applyJobBoundary(controller.jobGeneration.value)
                 val parsed = parser.parse(section.screen)
                 val current = _state.value
                 val draft = if (activeCaptureJob == null) current.nextCaptureDraft() else current
@@ -231,6 +221,20 @@ class CaptureViewModel @Inject constructor(
     }
 
     private fun normalizeCapturedText(value: String) = value.lineSequence().map(String::trim).filter(String::isNotBlank).joinToString(" ").lowercase()
+
+    private fun applyJobBoundary(generation: Long) {
+        if (generation == handledJobGeneration) return
+        val finishedTitle = activeCaptureJob?.title
+        activeCaptureJob = null
+        handledJobGeneration = generation
+        _state.value = _state.value.copy(
+            message = if (finishedTitle.isNullOrBlank()) {
+                "Ready for a job. The next capture starts a new job."
+            } else {
+                "Finished $finishedTitle. The next capture starts a new job."
+            },
+        )
+    }
 
     private fun parseExperienceRange(value: String): Pair<Int?, Int?> {
         val range = Regex("(?i)\\b(\\d+(?:\\.\\d+)?)\\s*(?:-|–|to)\\s*(\\d+(?:\\.\\d+)?)\\s*(?:years?|yrs?)\\b").find(value)

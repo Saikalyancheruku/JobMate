@@ -26,8 +26,8 @@ class CaptureSessionController @Inject constructor() {
     val state = _state.asStateFlow()
     private val _sections = MutableSharedFlow<CapturedTextSection>(extraBufferCapacity = 8)
     val sections = _sections.asSharedFlow()
-    private val _finishJobRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val finishJobRequests = _finishJobRequests.asSharedFlow()
+    private val _jobGeneration = MutableStateFlow(0L)
+    val jobGeneration = _jobGeneration.asStateFlow()
 
     fun started() { _state.value = CaptureSessionState.Capturing }
     fun waitingForFrame() { _state.value = CaptureSessionState.WaitingForFrame }
@@ -41,7 +41,7 @@ class CaptureSessionController @Inject constructor() {
         }
     }
     fun saved(title: String, company: String) { _state.value = CaptureSessionState.Saved(title, company) }
-    fun finishCurrentJob() { _finishJobRequests.tryEmit(Unit) }
+    fun finishCurrentJob() { _jobGeneration.value = _jobGeneration.value + 1 }
     fun failed(message: String) { _state.value = CaptureSessionState.Error(message) }
     fun stopped() { _state.value = CaptureSessionState.Idle }
 }

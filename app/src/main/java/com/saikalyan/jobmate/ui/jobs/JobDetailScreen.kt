@@ -1,5 +1,11 @@
 package com.saikalyan.jobmate.ui.jobs
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +21,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -26,6 +33,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.saikalyan.jobmate.domain.model.Job
 import com.saikalyan.jobmate.domain.model.JobStatus
@@ -85,6 +96,7 @@ private fun JobDetails(
     onRequestDelete: () -> Unit,
     modifier: Modifier,
 ) {
+    val context = LocalContext.current
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -133,7 +145,7 @@ private fun JobDetails(
         job.experienceLevel?.let { DetailField("Experience level", it) }
         job.education?.let { DetailField("Education", it) }
         job.appliedAt?.let { DetailField("Applied", it.atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()) }
-        job.sourceUrl?.let { DetailField("URL", it) }
+        job.sourceUrl?.let { JobUrlActions(it, context) }
         job.experienceMin?.let { DetailField("Experience minimum", "$it ${if (it == 1) "year" else "years"}") }
         job.experienceMax?.let { DetailField("Experience maximum", "$it ${if (it == 1) "year" else "years"}") }
         job.followUpAt?.let { DetailField("Follow-up", it.toString()) }
@@ -146,6 +158,45 @@ private fun JobDetails(
         job.capturedAt?.let { DetailField("Captured at", it.toString()) }
         job.rawCapturedText?.let { DetailField("Raw captured text", it) }
         androidx.compose.foundation.layout.Spacer(Modifier.padding(bottom = 10.dp))
+    }
+}
+
+@Composable
+private fun JobUrlActions(url: String, context: Context) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Job URL", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(url, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            IconButton(
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Job URL", url))
+                    Toast.makeText(context, "Job URL copied", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.semantics { contentDescription = "Copy job URL" },
+            ) { Text("⧉", style = MaterialTheme.typography.titleLarge) }
+            IconButton(
+                onClick = {
+                    val normalizedUrl = url.trim().let {
+                        if (it.startsWith("https://", ignoreCase = true) || it.startsWith("http://", ignoreCase = true)) it else "https://$it"
+                    }
+                    val uri = Uri.parse(normalizedUrl)
+                    if (uri.scheme !in setOf("http", "https")) {
+                        Toast.makeText(context, "This job link is not a valid web URL", Toast.LENGTH_SHORT).show()
+                    } else {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                            .onFailure { Toast.makeText(context, "No app can open this job link", Toast.LENGTH_SHORT).show() }
+                    }
+                },
+                modifier = Modifier.semantics { contentDescription = "Open job URL" },
+            ) { Text("↗", style = MaterialTheme.typography.titleLarge) }
+        }
     }
 }
 
