@@ -44,9 +44,16 @@ class CaptureViewModel @Inject constructor(
     init {
         viewModelScope.launch { controller.state.collect { _state.value = _state.value.copy(session = it) } }
         viewModelScope.launch {
-            controller.newJobRequests.collect {
+            controller.finishJobRequests.collect {
+                val finishedTitle = activeCaptureJob?.title
                 activeCaptureJob = null
-                _state.value = _state.value.nextCaptureDraft().copy(message = "New job started. Capture its pages; tap NEXT before moving to another listing.")
+                _state.value = _state.value.copy(
+                    message = if (finishedTitle.isNullOrBlank()) {
+                        "Ready for a job. The next capture starts a new job."
+                    } else {
+                        "Finished $finishedTitle. The next capture starts a new job."
+                    },
+                )
             }
         }
         viewModelScope.launch {
@@ -211,8 +218,8 @@ class CaptureViewModel @Inject constructor(
                     saving = false,
                     saved = true,
                     savedJobsInSession = latest.savedJobsInSession + (if (isNewJob) 1 else 0),
-                    message = if (isNewJob) "Job saved automatically. Capture more pages, or tap NEXT for another job."
-                    else "Page added to ${job.title}; the saved job now includes this screen. Tap NEXT before another listing.",
+                    message = if (isNewJob) "Job started and saved. Capture more pages, then finish the job when done."
+                    else "Page added to ${job.title}. Finish the job when you reach the end of this listing.",
                 )
                 controller.saved(job.title, job.companyName)
             }

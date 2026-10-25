@@ -84,9 +84,9 @@ fun CaptureRoute(sharedText: String? = null, viewModel: CaptureViewModel = hiltV
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("How it works", style = MaterialTheme.typography.titleLarge)
                 CaptureStep("1", "Start screen capture here and accept Android’s prompt.")
-                CaptureStep("2", "On a listing, tap CAP. Scroll and tap CAP again to add more of that job.")
-                CaptureStep("3", "Tap NEXT once when you move to a different listing.")
-                Text("CAP captures the page you are viewing. Avoid tapping it while JobMate is on screen.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                CaptureStep("2", "Tap the camera bubble to capture a page. Repeat it as you scroll; every page joins the current job.")
+                CaptureStep("3", "Tap the ✓ bubble when you reach the end of that listing. The next camera capture starts a new job.")
+                Text("The camera captures the page you are viewing. Avoid tapping it while JobMate is on screen.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -141,7 +141,7 @@ fun CaptureRoute(sharedText: String? = null, viewModel: CaptureViewModel = hiltV
     if (showConsentExplanation) AlertDialog(
         onDismissRequest = { showConsentExplanation = false },
         title = { Text("Share your screen with JobMate?") },
-        text = { Text("Android will ask you to allow JobMate's capture bubble to display over other apps, then show a screen-sharing consent prompt. Tap CAP on each page of one listing to add it to the same saved job. When switching to a different listing, tap NEXT once. The bubble shows OCR/save progress; you can edit saved details later from Jobs.") },
+        text = { Text("Android will ask you to allow JobMate's capture bubble to display over other apps, then show a screen-sharing consent prompt. Tap the camera bubble on each page of one listing; those pages update the same saved job. Tap ✓ when you finish that listing. The next camera capture starts a new job. You can edit saved details later from Jobs.") },
         confirmButton = { TextButton(onClick = {
             showConsentExplanation = false
             val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager

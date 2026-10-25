@@ -200,7 +200,7 @@ class CaptureForegroundService : Service() {
             Notification.Builder(this)
         }.setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentTitle("JobMate screen capture is active")
-            .setContentText("CAP adds a page to this job; NEXT starts another job.")
+            .setContentText("Capture adds a page to this job. Finish it when you reach the end of the listing.")
             .setContentIntent(openPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -218,7 +218,7 @@ class CaptureForegroundService : Service() {
             return
         }
         // Hide the complete overlay window while MediaProjection captures the target app.
-        // Hiding only CAP leaves NEXT visible and OCR records it as job text.
+        // Hiding only the camera control leaves the finish control visible to OCR.
         captureBubbleRoot?.visibility = View.INVISIBLE
         controller.waitingForFrame()
         val request = Runnable {
@@ -264,11 +264,11 @@ class CaptureForegroundService : Service() {
             gravity = Gravity.CENTER_VERTICAL
         }
         val bubble = TextView(this).apply {
-            text = "CAP"
+            text = "📷"
             setTextColor(Color.WHITE)
             textSize = 12f
             gravity = Gravity.CENTER
-            contentDescription = "Capture and save this job screen"
+            contentDescription = "Capture this screen and add it to the current job"
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.rgb(25, 103, 210))
@@ -276,12 +276,12 @@ class CaptureForegroundService : Service() {
             }
             elevation = 8 * density
         }
-        val nextBubble = TextView(this).apply {
-            text = "NEXT"
+        val finishBubble = TextView(this).apply {
+            text = "✓"
             setTextColor(Color.WHITE)
             textSize = 11f
             gravity = Gravity.CENTER
-            contentDescription = "Start capturing a different job listing"
+            contentDescription = "Finish the current job; the next capture starts a new job"
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 16 * density
@@ -290,7 +290,7 @@ class CaptureForegroundService : Service() {
             elevation = 8 * density
         }
         root.addView(bubble, LinearLayout.LayoutParams(size, size).apply { marginEnd = (4 * density).toInt() })
-        root.addView(nextBubble, LinearLayout.LayoutParams(size, size))
+        root.addView(finishBubble, LinearLayout.LayoutParams(size, size))
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         fun installTouch(view: View, onTap: () -> Unit) {
             view.setOnTouchListener(object : View.OnTouchListener {
@@ -332,12 +332,12 @@ class CaptureForegroundService : Service() {
             })
         }
         installTouch(bubble) { requestCaptureAfterNotificationCloses() }
-        installTouch(nextBubble) {
+        installTouch(finishBubble) {
             if (captureInProgress.get()) {
                 Toast.makeText(this, "Wait for the current page to finish saving.", Toast.LENGTH_SHORT).show()
             } else {
-                controller.startNextJob()
-                Toast.makeText(this, "New job started. Capture its pages with CAP.", Toast.LENGTH_SHORT).show()
+                controller.finishCurrentJob()
+                Toast.makeText(this, "Job finished. Your next capture will start a new job.", Toast.LENGTH_SHORT).show()
             }
         }
         manager.addView(root, params)
@@ -361,11 +361,11 @@ class CaptureForegroundService : Service() {
         val bubble = captureBubble ?: return
         captureBubbleRoot?.visibility = if (state == CaptureSessionState.WaitingForFrame) View.INVISIBLE else View.VISIBLE
         when (state) {
-            CaptureSessionState.Idle -> bubble.text = "CAP"
-            CaptureSessionState.Capturing -> { bubble.text = "CAP"; bubble.visibility = View.VISIBLE }
+            CaptureSessionState.Idle -> bubble.text = "📷"
+            CaptureSessionState.Capturing -> { bubble.text = "📷"; bubble.visibility = View.VISIBLE }
             CaptureSessionState.WaitingForFrame -> { bubble.text = "…"; bubble.visibility = View.INVISIBLE }
             CaptureSessionState.Saving -> { bubble.text = "SAVE"; bubble.visibility = View.VISIBLE }
-            is CaptureSessionState.Saved -> { bubble.text = "✓"; bubble.visibility = View.VISIBLE }
+            is CaptureSessionState.Saved -> { bubble.text = "📷"; bubble.visibility = View.VISIBLE }
             is CaptureSessionState.Error -> {
                 bubble.text = "!"
                 bubble.contentDescription = state.message
