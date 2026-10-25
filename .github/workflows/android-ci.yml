@@ -71,10 +71,35 @@ jobs:
           JOBMATE_VERSION_CODE: ${{ steps.app-version.outputs.code }}
         run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug "-PjobmateVersionName=$JOBMATE_VERSION_NAME" "-PjobmateVersionCode=$JOBMATE_VERSION_CODE"
 
+      - name: Export APK signing certificate details
+        if: ${{ always() && hashFiles('app/build/outputs/apk/debug/app-debug.apk') != '' }}
+        id: apk-certificate
+        shell: bash
+        run: |
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          apksigner="$ANDROID_HOME/build-tools/37.0.0/apksigner"
+          certificate_file="app/build/outputs/apk/debug/app-debug-certificate.txt"
+          "$apksigner" verify --print-certs --print-certs-pem "$apk" > "$certificate_file"
+          sha1="$(sed -n 's/.*certificate SHA-1 digest: //p' "$certificate_file" | head -n 1)"
+          if [[ -z "$sha1" ]]; then
+            echo "Could not read the APK signing certificate SHA-1." >&2
+            exit 1
+          fi
+          echo "sha1=$sha1" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Debug APK signing certificate"
+            echo "- APK: app-debug.apk"
+            echo "- SHA-1: $sha1"
+            echo "- Full public certificate is included in the downloadable artifact as app-debug-certificate.txt."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload debug APK
+        if: ${{ always() && hashFiles('app/build/outputs/apk/debug/app-debug.apk') != '' }}
         uses: actions/upload-artifact@v7
         with:
           name: jobmate-debug-${{ steps.app-version.outputs.name }}
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/app-debug-certificate.txt
+          if-no-files-found: warn
           retention-days: 14

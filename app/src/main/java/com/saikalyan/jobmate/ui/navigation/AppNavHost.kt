@@ -1,9 +1,13 @@
 package com.saikalyan.jobmate.ui.navigation
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -20,7 +24,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,6 +36,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.saikalyan.jobmate.R
 import com.saikalyan.jobmate.ui.dashboard.DashboardScreen
 import com.saikalyan.jobmate.ui.dashboard.DashboardViewModel
 import com.saikalyan.jobmate.ui.contacts.ContactImportRoute
@@ -131,7 +138,16 @@ fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Image(
+                            painter = painterResource(R.drawable.jobmate_mark),
+                            contentDescription = null,
+                            modifier = Modifier.size(30.dp),
+                        )
+                        Text(title, style = MaterialTheme.typography.titleLarge)
+                    }
+                },
                 navigationIcon = {
                     if (isNested) IconButton(onClick = { navController.popBackStack() }) {
                         Text("‹", style = MaterialTheme.typography.headlineMedium)
