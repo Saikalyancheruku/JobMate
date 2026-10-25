@@ -44,14 +44,14 @@ class DatabaseRelationsTest {
     }
 
     @Test
-    fun initialDatabaseCreatesAllTablesAtVersionOne() {
+    fun initialDatabaseCreatesAllTablesAtCurrentVersion() {
         val sql = database.openHelper.writableDatabase
         val cursor = sql.query("SELECT name FROM sqlite_master WHERE type = 'table'")
         val tables = buildSet {
             cursor.use { while (it.moveToNext()) add(it.getString(0)) }
         }
 
-        assertEquals(1, sql.version)
+        assertEquals(2, sql.version)
         assertTrue(
             tables.containsAll(
                 setOf(
