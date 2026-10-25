@@ -7,7 +7,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -33,9 +32,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             JobMateTheme(darkTheme = darkTheme) {
                 AppNavHost(sharedText = sharedText,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .safeDrawingPadding(),
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }

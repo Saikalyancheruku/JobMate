@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -156,21 +157,23 @@ fun AppNavHost(modifier: Modifier = Modifier, sharedText: String? = null) {
             )
         },
         bottomBar = {
-            NavigationBar {
-                primaryNavItems.forEach { item ->
+            if (!(route == Routes.AI_SETTINGS && WindowInsets.isImeVisible)) {
+                NavigationBar {
+                    primaryNavItems.forEach { item ->
+                        NavigationBarItem(
+                            selected = route == item.route || (item.route == Routes.JOBS && (route.startsWith("job/") || route.startsWith("job-editor/"))),
+                            onClick = { moreExpanded = false; navController.navigate(item.route) { launchSingleTop = true } },
+                            icon = { Text(item.symbol, style = MaterialTheme.typography.titleLarge) },
+                            label = { Text(item.title) },
+                        )
+                    }
                     NavigationBarItem(
-                        selected = route == item.route || (item.route == Routes.JOBS && (route.startsWith("job/") || route.startsWith("job-editor/"))),
-                        onClick = { moreExpanded = false; navController.navigate(item.route) { launchSingleTop = true } },
-                        icon = { Text(item.symbol, style = MaterialTheme.typography.titleLarge) },
-                        label = { Text(item.title) },
+                        selected = moreNavItems.any { route == it.route || route.startsWith("${it.route}/") },
+                        onClick = { moreExpanded = true },
+                        icon = { Text("•••", style = MaterialTheme.typography.titleMedium) },
+                        label = { Text("More") },
                     )
                 }
-                NavigationBarItem(
-                    selected = moreNavItems.any { route == it.route || route.startsWith("${it.route}/") },
-                    onClick = { moreExpanded = true },
-                    icon = { Text("•••", style = MaterialTheme.typography.titleMedium) },
-                    label = { Text("More") },
-                )
             }
         },
     ) { contentPadding ->
