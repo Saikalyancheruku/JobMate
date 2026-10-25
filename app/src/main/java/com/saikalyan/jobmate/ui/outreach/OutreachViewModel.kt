@@ -17,6 +17,7 @@ import com.saikalyan.jobmate.domain.repository.RepositoryResult
 import com.saikalyan.jobmate.domain.repository.ResumeRepository
 import com.saikalyan.jobmate.domain.usecase.TemplateRenderer
 import com.saikalyan.jobmate.data.remote.GeminiReferralDraftClient
+import com.saikalyan.jobmate.data.storage.AppPreferences
 import com.saikalyan.jobmate.data.secure.AiApiKeyStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +43,7 @@ data class OutreachComposerUiState(
     val templateId: String? = null,
     val resumeId: String? = null,
     val senderName: String = "",
+    val linkedInProfileUrl: String = "",
     val subject: String = "",
     val body: String = "",
     val previews: List<RecipientPreview> = emptyList(),
@@ -67,12 +69,30 @@ class OutreachViewModel @Inject constructor(
     private val renderer: TemplateRenderer,
     private val aiStore: AiApiKeyStore,
     private val referralClient: GeminiReferralDraftClient,
+    private val preferences: AppPreferences,
     private val clock: Clock,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(OutreachComposerUiState())
     val uiState: StateFlow<OutreachComposerUiState> = _uiState.asStateFlow()
+    private var savedSenderName = ""
 
     init {
+        viewModelScope.launch {
+            preferences.senderName.collect { name ->
+                val previousSetting = savedSenderName
+                savedSenderName = name
+                update { current ->
+                    if (current.senderName.isBlank() || current.senderName == previousSetting) {
+                        current.copy(senderName = name).repreview()
+                    } else current
+                }
+            }
+        }
+        viewModelScope.launch {
+            preferences.linkedInProfileUrl.collect { url ->
+                update { it.copy(linkedInProfileUrl = url).repreview() }
+            }
+        }
         viewModelScope.launch { jobs.observeJobs().collect { result -> when (result) {
             is RepositoryResult.Success -> update { it.copy(jobs = result.value) }
             is RepositoryResult.Failure -> update { it.copy(error = "Could not load jobs for outreach.") }
@@ -250,7 +270,7 @@ class OutreachViewModel @Inject constructor(
             companyName = original.companyName, templateName = "Follow-up ${original.followUpCount + 1}",
             resumeDisplayName = null,
             subject = if (original.subject.startsWith("Re:", true)) original.subject else "Re: ${original.subject}",
-            body = "Hi $name,\n\nI wanted to follow up on my earlier note about ${original.jobTitle ?: "the role"} at ${original.companyName ?: "your company"}. If you have a moment, I would be grateful for any guidance or referral consideration.\n\nThank you,\n${_uiState.value.senderName}",
+            body = addLinkedInLink("Hi $name,\n\nI wanted to follow up on my earlier note about ${original.jobTitle ?: "the role"} at ${original.companyName ?: "your company"}. If you have a moment, I would be grateful for any guidance or referral consideration.\n\nThank you,\n${_uiState.value.senderName}", _uiState.value.linkedInProfileUrl),
             messageKind = "FOLLOW_UP", parentOutreachId = original.id,
             followUpCount = original.followUpCount + 1, createdAt = now, updatedAt = now,
         )
@@ -276,10 +296,21 @@ class OutreachViewModel @Inject constructor(
             "jobTitle" to job.title,
             "jobUrl" to job.sourceUrl,
             "senderName" to state.senderName,
+            "linkedInUrl" to state.linkedInProfileUrl,
             ),
         )
-        if (result !is TemplateRenderResult.Rendered || state.resumeId == null) return result
-        return result.copy(body = includeResumeAttachmentNotice(result.body))
+        if (result !is TemplateRenderResult.Rendered) return result
+        var body = result.body
+        if (state.resumeId != null) body = includeResumeAttachmentNotice(body)
+        body = addLinkedInLink(body, state.linkedInProfileUrl)
+        return result.copy(body = body)
+    }
+
+    private fun addLinkedInLink(body: String, profileUrl: String): String {
+        val url = profileUrl.trim()
+        if (url.isBlank() || body.contains(url, ignoreCase = true)) return body
+        val normalizedUrl = if (url.startsWith("https://", true) || url.startsWith("http://", true)) url else "https://$url"
+        return "${body.trimEnd()}\n\nLinkedIn: $normalizedUrl"
     }
 
     private fun includeResumeAttachmentNotice(body: String): String {

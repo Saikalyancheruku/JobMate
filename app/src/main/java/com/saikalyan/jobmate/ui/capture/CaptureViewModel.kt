@@ -37,7 +37,7 @@ class CaptureViewModel @Inject constructor(
     private val clock: Clock,
 ) : ViewModel() {
     private val parser = JobFieldParser()
-    private var activeCaptureJob: Job? = null
+    private var activeCaptureJob: Job? = controller.activeJob()
     private var handledJobGeneration = controller.jobGeneration.value
     private val _state = MutableStateFlow(CaptureUiState())
     val state = _state.asStateFlow()
@@ -135,7 +135,7 @@ class CaptureViewModel @Inject constructor(
         capturedAt: java.time.Instant,
     ) {
         val now = clock.instant()
-        val active = activeCaptureJob
+        val active = activeCaptureJob ?: controller.activeJob()
         var isNewJob = active == null
         val baseJob = active ?: run {
             val title = parsed.title?.value?.trim().takeUnless { it.isNullOrBlank() }
@@ -200,9 +200,15 @@ class CaptureViewModel @Inject constructor(
             sourceUrl = baseJob.sourceUrl ?: parsed.sourceUrl?.value?.trim()?.ifBlank { null },
             updatedAt = now,
         )
+        val saveGeneration = controller.jobGeneration.value
         activeCaptureJob = job
+        controller.setActiveJob(job)
         when (jobs.save(job)) {
             is RepositoryResult.Success -> {
+                if (controller.jobGeneration.value != saveGeneration) {
+                    activeCaptureJob = null
+                    controller.setActiveJob(null)
+                }
                 val latest = _state.value
                 _state.value = latest.copy(
                     saving = false,
@@ -214,6 +220,10 @@ class CaptureViewModel @Inject constructor(
                 controller.saved(job.title, job.companyName)
             }
             is RepositoryResult.Failure -> {
+                if (controller.jobGeneration.value == saveGeneration) {
+                    activeCaptureJob = active
+                    controller.setActiveJob(active)
+                }
                 _state.value = _state.value.copy(saving = false, message = "Could not save this capture. Open JobMate to try capturing it again.")
                 controller.failed("Could not save this capture. Try capturing it again.")
             }
@@ -226,6 +236,7 @@ class CaptureViewModel @Inject constructor(
         if (generation == handledJobGeneration) return
         val finishedTitle = activeCaptureJob?.title
         activeCaptureJob = null
+        controller.setActiveJob(null)
         handledJobGeneration = generation
         _state.value = _state.value.copy(
             message = if (finishedTitle.isNullOrBlank()) {

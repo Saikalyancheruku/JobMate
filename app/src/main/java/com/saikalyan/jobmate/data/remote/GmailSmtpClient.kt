@@ -68,11 +68,12 @@ class GmailSmtpClient @Inject constructor(
                 setFrom(InternetAddress(credential.email, true))
                 setRecipient(Message.RecipientType.TO, address)
                 setSubject(subject, "UTF-8")
+                val readableBody = body.replace("\r\n", "\n").replace('\r', '\n').replace(Regex("\\n{3,}"), "\n\n")
                 if (attachment == null) {
-                    setText(body, "UTF-8")
+                    setText(readableBody, "UTF-8")
                 } else {
                     val multipart = MimeMultipart()
-                    multipart.addBodyPart(MimeBodyPart().apply { setText(body, "UTF-8") })
+                    multipart.addBodyPart(MimeBodyPart().apply { setText(readableBody, "UTF-8") })
                     multipart.addBodyPart(MimeBodyPart().apply {
                         dataHandler = DataHandler(FileDataSource(attachment))
                         fileName = attachmentName?.takeIf(String::isNotBlank) ?: "resume.pdf"

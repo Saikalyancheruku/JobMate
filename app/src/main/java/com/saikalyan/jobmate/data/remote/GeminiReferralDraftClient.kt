@@ -19,7 +19,9 @@ class GeminiReferralDraftClient @Inject constructor() {
         val prompt = """
             Draft a concise, professional email asking a contact for a referral for the job below.
             Use only facts present in the job and candidate profile. Do not invent experience, relationships, or claims.
-            Return a subject and body as JSON. This draft will be reused for different contacts.
+            Return subject, greeting, paragraphs, and closing as JSON. This draft will be reused for different contacts.
+            Return paragraphs as an array with 1-3 short message paragraphs. JobMate inserts real blank lines between
+            greeting, paragraphs, closing, and sender name; do not put the complete email in one paragraph.
             Use {{firstName}} for the recipient's first name and {{senderName}} for the sender's name.
             You may use {{jobTitle}}, {{companyName}}, and {{jobUrl}} placeholders. Do not include other placeholders.
             Do not include a fabricated contact name, signature, or email address.
@@ -51,8 +53,10 @@ class GeminiReferralDraftClient @Inject constructor() {
                 .put("generationConfig", JSONObject().put("temperature", 0.3).put("responseMimeType", "application/json")
                     .put("responseSchema", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
                         .put("subject", JSONObject().put("type", "STRING"))
-                        .put("body", JSONObject().put("type", "STRING")))
-                        .put("required", JSONArray().put("subject").put("body"))))
+                        .put("greeting", JSONObject().put("type", "STRING"))
+                        .put("paragraphs", JSONObject().put("type", "ARRAY").put("items", JSONObject().put("type", "STRING")))
+                        .put("closing", JSONObject().put("type", "STRING")))
+                        .put("required", JSONArray().put("subject").put("greeting").put("paragraphs").put("closing"))))
             connection.outputStream.use { it.write(request.toString().toByteArray(Charsets.UTF_8)) }
             if (connection.responseCode !in 200..299) {
                 throw IllegalStateException(when (connection.responseCode) {
@@ -66,11 +70,18 @@ class GeminiReferralDraftClient @Inject constructor() {
             val text = JSONObject(response).getJSONArray("candidates").getJSONObject(0)
                 .getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
             val json = JSONObject(text)
+            val paragraphs = json.optJSONArray("paragraphs")?.let { array ->
+                (0 until array.length()).mapNotNull { array.optString(it).trim().takeIf(String::isNotBlank) }
+            }.orEmpty()
+            val greeting = json.optString("greeting").trim()
+            val closing = json.optString("closing").trim()
+            if (greeting.isBlank() || paragraphs.isEmpty() || closing.isBlank()) {
+                throw IllegalStateException("Gemini returned an incomplete email structure. Try generating the draft again.")
+            }
             ReferralEmailDraft(
                 subject = json.optString("subject").trim().takeIf(String::isNotBlank)
                     ?: throw IllegalStateException("Gemini returned no email subject."),
-                body = json.optString("body").trim().takeIf(String::isNotBlank)
-                    ?: throw IllegalStateException("Gemini returned no email body."),
+                body = listOf(greeting, paragraphs.joinToString("\n\n"), closing, "{{senderName}}").joinToString("\n\n"),
             )
         } finally {
             connection.disconnect()

@@ -26,6 +26,7 @@ class PrivacyDataManager @Inject constructor(
     private val credentials: SecureCredentialStore,
     private val aiApiKeyStore: AiApiKeyStore,
     private val sheetsPreferences: SheetsSyncPreferences,
+    private val appPreferences: AppPreferences,
 ) {
     suspend fun deleteAll() = withContext(Dispatchers.IO) {
         WorkManager.getInstance(context).cancelAllWork()
@@ -36,6 +37,8 @@ class PrivacyDataManager @Inject constructor(
         sheetsPreferences.disconnect()
         credentials.clear()
         aiApiKeyStore.clear()
+        appPreferences.clearSenderName()
+        appPreferences.clearLinkedInProfileUrl()
         database.clearAllTables()
         File(context.filesDir, "resumes").deleteRecursively()
         File(context.cacheDir, "exports").deleteRecursively()

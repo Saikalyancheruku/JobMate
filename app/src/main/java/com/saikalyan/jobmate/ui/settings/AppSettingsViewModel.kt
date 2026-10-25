@@ -21,7 +21,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 
-data class AppSettingsState(val darkTheme: Boolean = false, val busy: Boolean = false, val message: String? = null)
+data class AppSettingsState(
+    val darkTheme: Boolean = false,
+    val senderName: String = "",
+    val linkedInProfileUrl: String = "",
+    val busy: Boolean = false,
+    val message: String? = null,
+)
 
 @HiltViewModel
 class AppSettingsViewModel @Inject constructor(
@@ -34,10 +40,34 @@ class AppSettingsViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow(AppSettingsState())
     val state = _state.asStateFlow()
-    init { viewModelScope.launch { preferences.darkTheme.collect { _state.value = _state.value.copy(darkTheme = it) } } }
+    init {
+        viewModelScope.launch { preferences.darkTheme.collect { _state.value = _state.value.copy(darkTheme = it) } }
+        viewModelScope.launch { preferences.senderName.collect { _state.value = _state.value.copy(senderName = it) } }
+        viewModelScope.launch { preferences.linkedInProfileUrl.collect { _state.value = _state.value.copy(linkedInProfileUrl = it) } }
+    }
     fun setDarkTheme(enabled: Boolean) { viewModelScope.launch { preferences.setDarkTheme(enabled) } }
+    fun saveSenderName(name: String) {
+        viewModelScope.launch {
+            try {
+                preferences.setSenderName(name)
+                _state.value = _state.value.copy(message = "Sender name saved for outreach drafts.")
+            } catch (_: Exception) {
+                _state.value = _state.value.copy(message = "Could not save the sender name.")
+            }
+        }
+    }
+    fun saveLinkedInProfileUrl(url: String) {
+        viewModelScope.launch {
+            try {
+                preferences.setLinkedInProfileUrl(url)
+                _state.value = _state.value.copy(message = "LinkedIn profile URL saved. It will be added below your email signature.")
+            } catch (_: Exception) {
+                _state.value = _state.value.copy(message = "Could not save the LinkedIn profile URL.")
+            }
+        }
+    }
     fun deleteAll() { _state.value = _state.value.copy(busy = true, message = null); viewModelScope.launch {
-        try { privacy.deleteAll(); _state.value = AppSettingsState(message = "Local jobs, contacts, outreach, templates, resumes, and saved provider credentials were deleted.") }
+        try { privacy.deleteAll(); _state.value = AppSettingsState(message = "Local jobs, contacts, outreach, templates, resumes, sender name, LinkedIn profile URL, and saved provider credentials were deleted.") }
         catch (_: Exception) { _state.value = _state.value.copy(busy = false, message = "Could not delete all local data. Try again.") }
     } }
     fun export(context: Context, uri: Uri) { _state.value = _state.value.copy(busy = true, message = null); viewModelScope.launch {

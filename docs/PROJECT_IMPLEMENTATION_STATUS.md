@@ -1,7 +1,7 @@
 # JobMate project implementation status
 
 **Last updated:** 2026-10-25
-**Overall status:** Source implementation through Phase 9 is recorded. The outreach core was extended with encrypted user-profile input, on-demand AI email drafting, company contact matching/manual selection, manual follow-up drafts, and resume attachment statements. AI Settings keyboard/header layout was adjusted. The latest supplied Actions run failed at Kotlin compilation because the Compose `WindowInsets.ime` extension import was missing; source now imports it, but CI has not rerun. Phase 10 delivery remains incomplete and no device verification is recorded for these changes.
+**Overall status:** Source implementation through Phase 9 is recorded. Step 64 changes active capture-job retention, optional missing job URL rendering, and email paragraph/line-break handling. Step 65 adds a saved sender name beside the LinkedIn profile URL setting for initial/follow-up signatures. Earlier outreach work includes encrypted user-profile input, on-demand AI email drafting, company contact matching/manual selection, manual follow-up drafts, and resume attachment statements. AI Settings keyboard/header layout was adjusted. The latest supplied Actions run failed at Kotlin compilation because the Compose `WindowInsets.ime` extension import was missing; source now imports it, but CI has not rerun. Phase 10 delivery remains incomplete; Steps 64–65 have not been built or device-tested.
 
 **Build compatibility update:** application `compileSdk` is 37 to address dependency AAR metadata requirements; `targetSdk` remains 36 and `minSdk` remains 26. CI requests SDK package `platforms;android-37.0` and Build Tools 37.0.0. The change is pending a successful CI run.
 
@@ -22,6 +22,14 @@ The audit on 2026-10-24 found that this workspace currently has a Git checkout o
 | 8 — Follow-ups and settings | WorkManager reminders, theme, CSV export, and local data deletion source are present. | Compilation, tests, notification behavior, export, and deletion have not been verified. |
 | 9 — Google Sheets | Google authorization, generated `JobMate Sync` sheet (`Jobs` and `Contacts` tabs), sync queue/worker, and conflict review source are present. | Google Cloud setup, compilation, tests, and real account/sync/device behavior remain pending. |
 | 10 — Delivery | Step 56 adds certificate output to the APK artifact; Step 57 adds the JobMate launcher/app-bar mark. The owner downloaded an artifact containing only the APK. Step 58 changes certificate extraction to the standalone `apksigner --print-certs-pem` option and adds a clear missing-tool error. | Not complete: Step 58 is not yet on a new Actions run; exact reason the previous artifact omitted the certificate file is unverified. The latest supplied test run had 13 of 14 tests pass; Step 52 fixed the stale schema assertion, but CI has not confirmed it. A stable test signing key is needed for repeatable Sheets OAuth testing across fresh Actions runners. |
+
+## Latest source changes awaiting verification
+
+- Phase 10 Step 64 stores the current capture job in the singleton capture-session controller so a recreated `CaptureViewModel` can continue the same listing. The controller clears it when the user finishes the job. This closes a source-level lifecycle gap; it does not establish the cause of every duplicate report until tested on the device.
+- The template renderer treats an unavailable `jobUrl` as optional and removes an orphaned URL label. Gemini drafting now returns structured greeting/body paragraphs/closing which JobMate assembles with blank lines; SMTP normalizes CRLF/CR to LF while preserving existing breaks.
+- App Settings now saves a LinkedIn profile URL locally. Initial and follow-up messages append it under the signature; deleting all local data clears the URL.
+- Phase 10 Step 65 adds a saved sender name in App Settings and loads it as the default in the outreach composer; a name edited directly in the composer remains an in-session override. Initial and follow-up drafts use the selected name. Delete-all clears both sender name and LinkedIn URL.
+- `git diff --check` passed with line-ending notices. `:app:compileDebugKotlin` was attempted but Gradle stopped before Kotlin compilation because no Android SDK path is configured; tests were not run. No CI rerun, mail send test, or device verification has been performed for Step 64.
 
 Tests were explicitly deferred for the newer feature phases. Seven JVM test files currently exist for earlier jobs/database behavior; their presence does not mean they pass. No test run is recorded as successful.
 

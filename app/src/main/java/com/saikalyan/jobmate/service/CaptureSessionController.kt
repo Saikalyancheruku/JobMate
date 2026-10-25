@@ -1,6 +1,7 @@
 package com.saikalyan.jobmate.service
 
 import com.saikalyan.jobmate.domain.usecase.RecognizedScreen
+import com.saikalyan.jobmate.domain.model.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -28,6 +29,11 @@ class CaptureSessionController @Inject constructor() {
     val sections = _sections.asSharedFlow()
     private val _jobGeneration = MutableStateFlow(0L)
     val jobGeneration = _jobGeneration.asStateFlow()
+    @Volatile private var currentJob: Job? = null
+
+    /** Keeps the active listing across CaptureViewModel recreation while the capture service is alive. */
+    fun activeJob(): Job? = currentJob
+    fun setActiveJob(job: Job?) { currentJob = job }
 
     fun started() { _state.value = CaptureSessionState.Capturing }
     fun waitingForFrame() { _state.value = CaptureSessionState.WaitingForFrame }
@@ -41,7 +47,10 @@ class CaptureSessionController @Inject constructor() {
         }
     }
     fun saved(title: String, company: String) { _state.value = CaptureSessionState.Saved(title, company) }
-    fun finishCurrentJob() { _jobGeneration.value = _jobGeneration.value + 1 }
+    fun finishCurrentJob() {
+        currentJob = null
+        _jobGeneration.value = _jobGeneration.value + 1
+    }
     fun failed(message: String) { _state.value = CaptureSessionState.Error(message) }
     fun stopped() { _state.value = CaptureSessionState.Idle }
 }
