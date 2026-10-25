@@ -22,6 +22,8 @@ data class ParsedJobFields(
     val location: FieldCandidate? = null,
     val skills: FieldCandidate? = null,
     val experience: FieldCandidate? = null,
+    val experienceMin: Int? = null,
+    val experienceMax: Int? = null,
     val salary: FieldCandidate? = null,
     val sourceUrl: FieldCandidate? = null,
     val description: String = "",
@@ -34,14 +36,15 @@ class JobFieldParser {
         val lines = text.lineSequence().map(String::trim).filter(String::isNotEmpty)
         val values = lines.toList()
         return parse(RecognizedScreen(text, values.mapIndexed { index, value ->
-            val top = if (values.isEmpty()) 0f else index.toFloat() / values.size
+            val top = 0.08f + index.toFloat() * 0.84f / values.size.coerceAtLeast(1)
             RecognizedLine(value, top = top, bottom = (top + 0.025f).coerceAtMost(1f))
         }))
     }
 
     fun parse(screen: RecognizedScreen): ParsedJobFields {
-        val lines = screen.lines.filter { it.text.isNotBlank() }.sortedWith(compareBy<RecognizedLine> { it.top }.thenBy { it.left })
-        if (lines.isEmpty()) return ParsedJobFields(description = screen.text.trim())
+        val lines = screen.lines.filter { it.text.isNotBlank() && !isSystemChrome(it) }
+            .sortedWith(compareBy<RecognizedLine> { it.top }.thenBy { it.left })
+        if (lines.isEmpty()) return ParsedJobFields(description = cleanDescription(screen))
         val layout = detectLayout(screen.text)
         val headerLimit = when (layout) {
             Layout.LINKEDIN -> 0.56f
@@ -60,8 +63,10 @@ class JobFieldParser {
         }
         val explicitLocation = findExplicitValue(lines, LOCATION_LABEL)
         val locationLine = explicitLocation ?: chooseLocation(headerLines, companyLine)
-        val experienceLine = lines.firstOrNull { EXPERIENCE.matches(it.text) || EXPERIENCE_LABEL.containsMatchIn(it.text) }
+        val experienceLine = lines.firstOrNull { EXPERIENCE.matches(it.text) }
+            ?: lines.firstOrNull { EXPERIENCE_LABEL.containsMatchIn(it.text) && EXPERIENCE.containsMatchIn(it.text) }
         val salaryLine = lines.firstOrNull { SALARY.containsMatchIn(it.text) }
+            ?: if (layout == Layout.NAUKRI) lines.firstOrNull { NOT_DISCLOSED.matches(it.text.trim()) } else null
         val skillsCandidate = chooseSkills(lines)
         val url = URL.find(screen.text)?.value?.trimEnd('.', ',', ')', ']')
 
@@ -80,6 +85,8 @@ class JobFieldParser {
             location = candidate(locationLine?.let { it.copy(text = cleanLocation(it.text)) }, if (explicitLocation != null) 0.96f else 0.78f),
             skills = skillsCandidate,
             experience = candidate(experienceLine, if (EXPERIENCE.matches(experienceLine?.text.orEmpty())) 0.95f else 0.78f),
+            experienceMin = experienceLine?.text?.let(::parseExperience)?.first,
+            experienceMax = experienceLine?.text?.let(::parseExperience)?.second,
             salary = candidate(salaryLine, if (SALARY.matches(salaryLine?.text.orEmpty())) 0.92f else 0.78f),
             sourceUrl = url?.let { FieldCandidate(it, 0.99f, it) },
             description = cleanDescription(screen),
@@ -159,11 +166,27 @@ class JobFieldParser {
         .trim(' ', '·', '•', '|', '-')
 
     private fun cleanDescription(screen: RecognizedScreen): String {
-        val sourceLines = screen.lines.map { it.text.trim() }.filter(String::isNotBlank)
+        val sourceLines = screen.lines.filterNot(::isSystemChrome).map { it.text.trim() }.filter(String::isNotBlank)
         val lines = if (sourceLines.isEmpty()) screen.text.lineSequence().map(String::trim).toList() else sourceLines
         return lines.filterNot { line ->
-            UI_NOISE.matches(line) || CHROME_NOISE.matches(line) || CAPTURE_CONTROL.matches(line)
+            UI_NOISE.matches(line) || CHROME_NOISE.matches(line) || CAPTURE_CONTROL.matches(line) ||
+                TIME_OR_STATUS.matches(line) || NOTIFICATION_NOISE.matches(line)
         }.distinct().joinToString("\n").trim()
+    }
+
+    private fun isSystemChrome(line: RecognizedLine): Boolean =
+        line.top <= 0.045f || TIME_OR_STATUS.matches(line.text.trim()) ||
+            (line.top <= 0.18f && NOTIFICATION_NOISE.containsMatchIn(line.text))
+
+    private fun parseExperience(value: String): Pair<Int?, Int?>? {
+        EXPERIENCE_RANGE.find(value)?.let { match ->
+            return match.groupValues[1].toDoubleOrNull()?.toInt() to match.groupValues[2].toDoubleOrNull()?.toInt()
+        }
+        EXPERIENCE_SINGLE.find(value)?.let { match ->
+            val years = match.groupValues[1].removeSuffix("+").toDoubleOrNull()?.toInt() ?: return null
+            return years to null
+        }
+        return null
     }
 
     private fun findExplicitValue(lines: List<RecognizedLine>, label: Regex): RecognizedLine? {
@@ -180,13 +203,16 @@ class JobFieldParser {
 
     private fun chooseSkills(lines: List<RecognizedLine>): FieldCandidate? {
         val naukriSkillHeading = Regex("(?i)^(?:must have skills|good to have skills)\\s*:?$")
-        val naukriIndex = lines.indexOfFirst { naukriSkillHeading.matches(it.text.trim()) }
-        if (naukriIndex >= 0) {
-            val heading = lines[naukriIndex]
-            val skills = lines.drop(naukriIndex + 1).takeWhile { line ->
-                !naukriSkillHeading.matches(line.text.trim()) && !SECTION_HEADING.matches(line.text.trim())
+        val skillGroups = lines.mapIndexedNotNull { index, line ->
+            if (!naukriSkillHeading.matches(line.text.trim())) return@mapIndexedNotNull null
+            val group = lines.drop(index + 1).takeWhile { next ->
+                !naukriSkillHeading.matches(next.text.trim()) && !SECTION_HEADING.matches(next.text.trim())
             }.take(8).map { it.text.trim() }.filterNot { UI_NOISE.matches(it) }
-            if (skills.isNotEmpty()) return FieldCandidate(skills.joinToString(", "), 0.86f, heading.text)
+            line.text to group
+        }
+        if (skillGroups.isNotEmpty()) {
+            val skills = skillGroups.flatMap { it.second }.distinct()
+            if (skills.isNotEmpty()) return FieldCandidate(skills.joinToString(", "), 0.86f, skillGroups.joinToString("; ") { it.first })
         }
         val headingIndex = lines.indexOfFirst { SKILLS_HEADING.containsMatchIn(it.text) }
         if (headingIndex >= 0) {
@@ -211,8 +237,13 @@ class JobFieldParser {
         val LOCATION_LABEL = Regex("(?i)\\b(?:job\\s+)?location\\s*[:|]|\\bbased\\s+in\\s*[:|]")
         val URL = Regex("https?://[^\\s)]+", RegexOption.IGNORE_CASE)
         val EXPERIENCE = Regex("(?i)\\b\\d+(?:\\.\\d+)?\\s*(?:-|–|to)\\s*\\d+(?:\\.\\d+)?\\s*(?:years?|yrs?)\\b|\\b\\d+(?:\\+)?\\s*(?:years?|yrs?)\\b")
+        val EXPERIENCE_RANGE = Regex("(?i)\\b(\\d+(?:\\.\\d+)?)\\s*(?:-|–|to)\\s*(\\d+(?:\\.\\d+)?)\\s*(?:years?|yrs?)\\b")
+        val EXPERIENCE_SINGLE = Regex("(?i)\\b(\\d+(?:\\+)?)(?:\\s*)(?:years?|yrs?)\\b")
         val EXPERIENCE_LABEL = Regex("(?i)(experience|work\\s+exp)")
         val SALARY = Regex("(?i)(salary|compensation|\\bctc\\b|\\blpa\\b|\\blacs?\\b|\\blakhs?\\b|₹|\\$|€|£)")
+        val NOT_DISCLOSED = Regex("(?i)^(?:not disclosed|salary not disclosed)$")
+        val TIME_OR_STATUS = Regex("(?i)^(?:\\d{1,2}:\\d{2}(?:\\s*[ap]m)?|\\d{1,3}(?:\\.\\d+)?\\s*(?:kb/s|% battery)|(?:5g|4g|lte|volte|wifi|wi-?fi|charging))$")
+        val NOTIFICATION_NOISE = Regex("(?i)\\b(?:new message|notification|battery low|charging|missed call|whatsapp|telegram|messages?)\\b")
         val SKILLS_HEADING = Regex("(?i)\\b(?:key\\s+)?skills?\\b")
         val SECTION_HEADING = Regex("(?i)^(about the job|job description|description|key skills|skills|required skills|role|responsibilities|requirements|qualifications|education|about company|company profile|employment type|industry|role category)\\s*:?$")
         val UI_NOISE = Regex("(?i)^(jobs?|search|home|messaging|notifications?|apply(?: now)?|easy apply|quick apply|save(?:d)?|posted|see more|see all|share|follow|promoted|verified|top applicant|job alert|next|dashboard|edit|status|saved|rejected|archive|delete|import|contacts|resumes|settings|app settings|sheets sync|capture review)$|\\b(?:applicants?|followers?|connections?)\\b|\\b\\d+\\s+(?:applicants?|followers?)\\b")

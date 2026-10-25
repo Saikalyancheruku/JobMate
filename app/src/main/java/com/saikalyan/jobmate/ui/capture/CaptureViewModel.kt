@@ -70,7 +70,7 @@ class CaptureViewModel @Inject constructor(
                     saving = true,
                     message = "Capture received. Saving this job automatically…",
                 )
-                saveCapturedSection(parsed, section.screen.text)
+                saveCapturedSection(parsed, parsed.description)
             }
         }
     }
@@ -113,11 +113,13 @@ class CaptureViewModel @Inject constructor(
                 }
             }
             val now = clock.instant()
+            val (experienceMin, experienceMax) = parseExperienceRange(s.experience)
             val job = Job(
                 id = UUID.randomUUID().toString(), title = s.title.trim(), companyName = s.company.trim(),
                 location = s.location.trim().ifBlank { null }, description = s.description.trim().ifBlank { null },
                 skills = s.skills.split(',').map(String::trim).filter(String::isNotBlank),
-                experienceMin = Regex("\\d+").find(s.experience)?.value?.toIntOrNull(),
+                experienceMin = experienceMin,
+                experienceMax = experienceMax,
                 salaryText = s.salary.trim().ifBlank { null }, source = s.source,
                 sourceUrl = s.sourceUrl.trim().ifBlank { null }, status = JobStatus.SAVED,
                 captureMethod = "USER_CONSENTED_SCREEN_OCR", fingerprint = fingerprint, createdAt = now, updatedAt = now,
@@ -175,7 +177,8 @@ class CaptureViewModel @Inject constructor(
             location = baseJob.location ?: parsed.location?.value?.trim()?.ifBlank { null },
             description = mergedDescription,
             skills = mergedSkills,
-            experienceMin = baseJob.experienceMin ?: parsed.experience?.value?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() },
+            experienceMin = baseJob.experienceMin ?: parsed.experienceMin,
+            experienceMax = baseJob.experienceMax ?: parsed.experienceMax,
             salaryText = baseJob.salaryText ?: parsed.salary?.value?.trim()?.ifBlank { null },
             sourceUrl = baseJob.sourceUrl ?: parsed.sourceUrl?.value?.trim()?.ifBlank { null },
             updatedAt = now,
@@ -201,6 +204,14 @@ class CaptureViewModel @Inject constructor(
     }
 
     private fun normalizeCapturedText(value: String) = value.lineSequence().map(String::trim).filter(String::isNotBlank).joinToString(" ").lowercase()
+
+    private fun parseExperienceRange(value: String): Pair<Int?, Int?> {
+        val range = Regex("(?i)\\b(\\d+(?:\\.\\d+)?)\\s*(?:-|–|to)\\s*(\\d+(?:\\.\\d+)?)\\s*(?:years?|yrs?)\\b").find(value)
+        if (range != null) return range.groupValues[1].toDoubleOrNull()?.toInt() to range.groupValues[2].toDoubleOrNull()?.toInt()
+        val single = Regex("(?i)\\b(\\d+(?:\\+)?)(?:\\s*)(?:years?|yrs?)\\b").find(value)
+        val years = single?.groupValues?.get(1)?.removeSuffix("+")?.toDoubleOrNull()?.toInt()
+        return years to null
+    }
 
     private fun CaptureUiState.nextCaptureDraft() = CaptureUiState(
         session = session,
