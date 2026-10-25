@@ -37,8 +37,8 @@ data class CorrectedJobFields(
         val nextMandatory = mandatorySkills.ifEmpty { job.mandatorySkills }
         val nextPreferred = preferredSkills.ifEmpty { job.preferredSkills }
         return job.copy(
-        title = title.nonBlankOr(job.title),
-        companyName = companyName.nonBlankOr(job.companyName),
+        title = title.nonBlankOrRequired(job.title),
+        companyName = companyName.nonBlankOrRequired(job.companyName),
         location = location.nonBlankOr(job.location),
         workArrangement = workArrangement.nonBlankOr(job.workArrangement),
         experienceMin = if (validExperience) proposedMin else job.experienceMin,
@@ -66,6 +66,7 @@ data class CorrectedJobFields(
         mandatorySkills.isNotEmpty() || preferredSkills.isNotEmpty()
 
     private fun String?.nonBlankOr(existing: String?): String? = this?.trim()?.takeIf(String::isNotEmpty) ?: existing
+    private fun String?.nonBlankOrRequired(existing: String): String = this?.trim()?.takeIf(String::isNotEmpty) ?: existing
 }
 
 @Singleton
