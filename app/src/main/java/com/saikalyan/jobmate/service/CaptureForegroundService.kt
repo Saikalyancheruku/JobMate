@@ -29,6 +29,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.provider.Settings
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ServiceCompat
@@ -62,6 +63,7 @@ class CaptureForegroundService : Service() {
     private var workerThread: HandlerThread? = null
     private var workerHandler: Handler? = null
     private var windowManager: WindowManager? = null
+    private var captureBubbleRoot: View? = null
     private var captureBubble: TextView? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -196,7 +198,7 @@ class CaptureForegroundService : Service() {
             Notification.Builder(this)
         }.setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentTitle("JobMate screen capture is active")
-            .setContentText("Use the floating CAP bubble to capture a job screen.")
+            .setContentText("CAP adds a page to this job; NEXT starts another job.")
             .setContentIntent(openPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -243,7 +245,7 @@ class CaptureForegroundService : Service() {
         val density = resources.displayMetrics.density
         val size = (56 * density).toInt()
         val params = WindowManager.LayoutParams(
-            size,
+            size * 2 + (8 * density).toInt(),
             size,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -252,6 +254,10 @@ class CaptureForegroundService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = (16 * density).toInt()
             y = (220 * density).toInt()
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
         val bubble = TextView(this).apply {
             text = "CAP"
@@ -266,15 +272,31 @@ class CaptureForegroundService : Service() {
             }
             elevation = 8 * density
         }
+        val nextBubble = TextView(this).apply {
+            text = "NEXT"
+            setTextColor(Color.WHITE)
+            textSize = 11f
+            gravity = Gravity.CENTER
+            contentDescription = "Start capturing a different job listing"
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 16 * density
+                setColor(Color.rgb(55, 71, 79))
+            }
+            elevation = 8 * density
+        }
+        root.addView(bubble, LinearLayout.LayoutParams(size, size).apply { marginEnd = (4 * density).toInt() })
+        root.addView(nextBubble, LinearLayout.LayoutParams(size, size))
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
-        bubble.setOnTouchListener(object : View.OnTouchListener {
-            private var downRawX = 0f
-            private var downRawY = 0f
-            private var startX = 0
-            private var startY = 0
-            private var dragged = false
+        fun installTouch(view: View, onTap: () -> Unit) {
+            view.setOnTouchListener(object : View.OnTouchListener {
+                private var downRawX = 0f
+                private var downRawY = 0f
+                private var startX = 0
+                private var startY = 0
+                private var dragged = false
 
-            override fun onTouch(view: View, event: MotionEvent): Boolean {
+                override fun onTouch(view: View, event: MotionEvent): Boolean {
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
                         downRawX = event.rawX
@@ -291,21 +313,32 @@ class CaptureForegroundService : Service() {
                         if (dragged) {
                             params.x = startX + dx.toInt()
                             params.y = startY + dy.toInt()
-                            runCatching { manager.updateViewLayout(bubble, params) }
+                            runCatching { manager.updateViewLayout(root, params) }
                         }
                         return true
                     }
                     MotionEvent.ACTION_UP -> {
-                        if (!dragged) requestCaptureAfterNotificationCloses()
+                        if (!dragged) onTap()
                         return true
                     }
                     MotionEvent.ACTION_CANCEL -> return true
                 }
                 return false
             }
-        })
-        manager.addView(bubble, params)
+            })
+        }
+        installTouch(bubble) { requestCaptureAfterNotificationCloses() }
+        installTouch(nextBubble) {
+            if (captureInProgress.get()) {
+                Toast.makeText(this, "Wait for the current page to finish saving.", Toast.LENGTH_SHORT).show()
+            } else {
+                controller.startNextJob()
+                Toast.makeText(this, "New job started. Capture its pages with CAP.", Toast.LENGTH_SHORT).show()
+            }
+        }
+        manager.addView(root, params)
         windowManager = manager
+        captureBubbleRoot = root
         captureBubble = bubble
     }
 
@@ -338,8 +371,9 @@ class CaptureForegroundService : Service() {
     }
 
     private fun removeCaptureBubble() {
-        val bubble = captureBubble ?: return
-        runCatching { windowManager?.removeView(bubble) }
+        val root = captureBubbleRoot ?: return
+        runCatching { windowManager?.removeView(root) }
+        captureBubbleRoot = null
         captureBubble = null
         windowManager = null
     }

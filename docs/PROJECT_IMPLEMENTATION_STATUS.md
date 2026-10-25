@@ -1,6 +1,6 @@
 # JobMate project implementation status
 
-**Last updated:** 2026-10-24  
+**Last updated:** 2026-10-25
 **Overall status:** Source implementation has reached Phase 9. The app has not passed a full build, CI run, or device verification. Do not treat the project as complete or verified.
 
 **Build compatibility update:** application `compileSdk` is 37 to address dependency AAR metadata requirements; `targetSdk` remains 36 and `minSdk` remains 26. CI requests SDK package `platforms;android-37.0` and Build Tools 37.0.0. The change is pending a successful CI run.
@@ -18,7 +18,7 @@ The audit on 2026-10-24 found that this workspace currently has a Git checkout o
 | 4 — Resumes | Private PDF storage, validation, list, preview, and deletion source are present. | Feature tests and Android build/device verification are deferred. |
 | 5 — Templates and outreach | Template management, rendering, draft composition, and confirmation flow source are present. | Feature tests and Android build/device verification are deferred. |
 | 6 — Gmail SMTP | App Password storage, SMTP STARTTLS, per-recipient send/history, and settings source are present. | Compilation, tests, Gmail account authorization, and real send/device checks have not been performed. |
-| 7 — Job capture | Consent-based MediaProjection, foreground service, on-device OCR, parsing, review/save, and shared-text route source are present. | Compilation, tests, and Android device/API behavior have not been verified. |
+| 7 — Job capture | Consent-based MediaProjection, foreground service, on-device OCR with normalized line bounds, layout-aware LinkedIn/Naukri heuristics, automatic save, CAP page merging, NEXT job separation, and shared-text route source are present. | Step 42 is source-only so far. Parser accuracy on actual LinkedIn/Naukri captures, compilation, tests, and Android device/API behavior have not been verified. |
 | 8 — Follow-ups and settings | WorkManager reminders, theme, CSV export, and local data deletion source are present. | Compilation, tests, notification behavior, export, and deletion have not been verified. |
 | 9 — Google Sheets | Google authorization, generated `JobMate Sync` sheet (`Jobs` and `Contacts` tabs), sync queue/worker, and conflict review source are present. | Google Cloud setup, compilation, tests, and real account/sync/device behavior remain pending. |
 | 10 — Delivery | Main and test Kotlin compilation succeeded in the latest supplied run; the three failing Robolectric DAO tests were changed to API 35 for JDK 17 compatibility. | Not complete: `:app:testDebugUnitTest` failed in 3 DAO test class setups. The API 35 adjustment needs CI confirmation; no successful lint/APK/device verification. |
@@ -53,6 +53,7 @@ Tests were explicitly deferred for the newer feature phases. Seven JVM test file
 - On 2026-10-24, `:app:tasks` configured successfully after the SDK change; `:app:checkDebugAarMetadata` could not evaluate metadata because the local Android SDK location is still missing.
 - The latest supplied Actions run passed main and unit-test Kotlin compilation, then failed during `:app:testDebugUnitTest`: 3 Robolectric DAO test classes requested API 36, which requires Java 21; CI is configured for JDK 17. They now request API 35 per [PHASE-10-STEP-35](progress/PHASE-10-STEP-35.md). The run shows lint analysis started but no successful `lintDebug` or `assembleDebug` result. Earlier compile fixes are in [Steps 32–34](progress/PHASE-10-STEP-32.md). No CI rerun has confirmed the latest change.
 - No successful full compilation, lint, test run, device check, or APK output is recorded.
+- The 2026-10-25 Phase 7 Step 42 change preserves ML Kit text line geometry through the capture controller and uses it during title/company/location parsing. See [PHASE-07-STEP-42](progress/PHASE-07-STEP-42.md); it has not yet been built or exercised on-device.
 - The audit made no Git mutations; the checkout already had `.git` and an `origin` remote.
 - The root `.gitignore` is absent, and `app/schemas/` has no exported Room schema JSON yet (only `.gitkeep`).
 

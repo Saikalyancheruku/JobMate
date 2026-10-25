@@ -44,13 +44,37 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
+      - name: Compute SemVer build identifier
+        id: app-version
+        shell: bash
+        run: |
+          base_version="$(tr -d '\r\n' < VERSION)"
+          if [[ ! "$base_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "VERSION must be MAJOR.MINOR.PATCH (got: $base_version)" >&2
+            exit 1
+          fi
+          if (( GITHUB_RUN_ATTEMPT < 1 || GITHUB_RUN_ATTEMPT > 999 )); then
+            echo "GITHUB_RUN_ATTEMPT must be between 1 and 999" >&2
+            exit 1
+          fi
+          version_code=$((1000000 + GITHUB_RUN_NUMBER * 1000 + GITHUB_RUN_ATTEMPT))
+          if (( version_code > 2100000000 )); then
+            echo "Calculated Android versionCode exceeds 2100000000" >&2
+            exit 1
+          fi
+          echo "name=${base_version}+ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+          echo "code=${version_code}" >> "$GITHUB_OUTPUT"
+
       - name: Run unit tests, lint, and assemble debug APK
-        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+        env:
+          JOBMATE_VERSION_NAME: ${{ steps.app-version.outputs.name }}
+          JOBMATE_VERSION_CODE: ${{ steps.app-version.outputs.code }}
+        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug "-PjobmateVersionName=$JOBMATE_VERSION_NAME" "-PjobmateVersionCode=$JOBMATE_VERSION_CODE"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
         with:
-          name: jobmate-debug-apk
+          name: jobmate-debug-${{ steps.app-version.outputs.name }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

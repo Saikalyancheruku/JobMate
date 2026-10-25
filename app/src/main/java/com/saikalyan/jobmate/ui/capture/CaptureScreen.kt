@@ -68,7 +68,7 @@ fun CaptureRoute(sharedText: String? = null, viewModel: CaptureViewModel = hiltV
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Capture a job listing")
-        Text("Start screen capture once, then switch to Naukri or LinkedIn and scroll manually. Tap the floating CAP bubble on each job listing. JobMate reads that screen and saves a job automatically; continue scrolling and tap again for the next job.")
+        Text("Start screen capture once, then switch to Naukri or LinkedIn and scroll manually. Tap CAP on each page of the current listing; pages are added to the same saved job automatically. When you open a different listing, tap NEXT once, then use CAP for its pages.")
         Text("OCR can miss details. Captured text is saved with the job, and you can correct its fields later from Jobs. Some apps may block screenshots.")
         Text("A draggable CAP bubble stays visible over other apps. Android requires Display over other apps access for this helper.")
         Text("Capture status: ${when (val session = state.session) {
@@ -115,7 +115,7 @@ fun CaptureRoute(sharedText: String? = null, viewModel: CaptureViewModel = hiltV
     if (showConsentExplanation) AlertDialog(
         onDismissRequest = { showConsentExplanation = false },
         title = { Text("Share your screen with JobMate?") },
-        text = { Text("Android will ask you to allow JobMate's capture bubble to display over other apps, then show a screen-sharing consent prompt. While viewing a job listing, tap the floating CAP bubble. JobMate captures the visible screen, shows OCR/save progress in the bubble, and saves the job automatically. Repeat on each listing. You can drag the bubble out of the way and edit saved details later from Jobs.") },
+        text = { Text("Android will ask you to allow JobMate's capture bubble to display over other apps, then show a screen-sharing consent prompt. Tap CAP on each page of one listing to add it to the same saved job. When switching to a different listing, tap NEXT once. The bubble shows OCR/save progress; you can edit saved details later from Jobs.") },
         confirmButton = { TextButton(onClick = {
             showConsentExplanation = false
             val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager

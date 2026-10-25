@@ -1,5 +1,6 @@
 package com.saikalyan.jobmate.service
 
+import com.saikalyan.jobmate.domain.usecase.RecognizedScreen
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -16,7 +17,7 @@ sealed interface CaptureSessionState {
     data class Error(val message: String) : CaptureSessionState
 }
 
-data class CapturedTextSection(val text: String)
+data class CapturedTextSection(val screen: RecognizedScreen)
 
 @Singleton
 class CaptureSessionController @Inject constructor() {
@@ -24,19 +25,22 @@ class CaptureSessionController @Inject constructor() {
     val state = _state.asStateFlow()
     private val _sections = MutableSharedFlow<CapturedTextSection>(extraBufferCapacity = 8)
     val sections = _sections.asSharedFlow()
+    private val _newJobRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val newJobRequests = _newJobRequests.asSharedFlow()
 
     fun started() { _state.value = CaptureSessionState.Capturing }
     fun waitingForFrame() { _state.value = CaptureSessionState.WaitingForFrame }
-    fun publish(text: String) {
-        if (text.isBlank()) _state.value = CaptureSessionState.Error("No readable text was found in this screen section.")
+    fun publish(screen: RecognizedScreen) {
+        if (screen.text.isBlank()) _state.value = CaptureSessionState.Error("No readable text was found in this screen section.")
         else {
             _state.value = CaptureSessionState.Saving
-            if (!_sections.tryEmit(CapturedTextSection(text))) {
+            if (!_sections.tryEmit(CapturedTextSection(screen))) {
                 _state.value = CaptureSessionState.Error("Capture queue is busy. Wait briefly, then try again.")
             }
         }
     }
     fun saved(title: String, company: String) { _state.value = CaptureSessionState.Saved(title, company) }
+    fun startNextJob() { _newJobRequests.tryEmit(Unit) }
     fun failed(message: String) { _state.value = CaptureSessionState.Error(message) }
     fun stopped() { _state.value = CaptureSessionState.Idle }
 }

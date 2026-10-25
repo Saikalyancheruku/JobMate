@@ -8,6 +8,8 @@ import java.nio.ByteBuffer
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.saikalyan.jobmate.domain.usecase.RecognizedLine
+import com.saikalyan.jobmate.domain.usecase.RecognizedScreen
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.Closeable
 import java.util.concurrent.atomic.AtomicBoolean
@@ -20,7 +22,7 @@ import kotlin.coroutines.resumeWithException
 class OcrTextRecognizer @Inject constructor() : Closeable {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-    suspend fun recognize(image: Image): String = suspendCancellableCoroutine { continuation ->
+    suspend fun recognize(image: Image): RecognizedScreen = suspendCancellableCoroutine { continuation ->
         val closed = AtomicBoolean(false)
         val bitmap = try {
             if (image.format == PixelFormat.RGBA_8888) rgbaToBitmap(image) else null
@@ -35,6 +37,8 @@ class OcrTextRecognizer @Inject constructor() : Closeable {
                 bitmap?.recycle()
             }
         }
+        val imageWidth = image.width.coerceAtLeast(1)
+        val imageHeight = image.height.coerceAtLeast(1)
         val input = try {
             if (image.format == ImageFormat.YUV_420_888) InputImage.fromMediaImage(image, 0)
             else bitmap?.let { InputImage.fromBitmap(it, 0) }
@@ -47,7 +51,20 @@ class OcrTextRecognizer @Inject constructor() : Closeable {
         }
         try {
             recognizer.process(input)
-                .addOnSuccessListener { result -> closeResources(); if (continuation.isActive) continuation.resume(result.text) }
+                .addOnSuccessListener { result ->
+                    val lines = result.textBlocks.flatMap { it.lines }.map { line ->
+                        val bounds = line.boundingBox
+                        RecognizedLine(
+                            text = line.text,
+                            left = (bounds?.left?.toFloat()?.div(imageWidth) ?: 0f).coerceIn(0f, 1f),
+                            top = (bounds?.top?.toFloat()?.div(imageHeight) ?: 0f).coerceIn(0f, 1f),
+                            right = (bounds?.right?.toFloat()?.div(imageWidth) ?: 1f).coerceIn(0f, 1f),
+                            bottom = (bounds?.bottom?.toFloat()?.div(imageHeight) ?: 1f).coerceIn(0f, 1f),
+                        )
+                    }
+                    closeResources()
+                    if (continuation.isActive) continuation.resume(RecognizedScreen(result.text, lines))
+                }
                 .addOnFailureListener { failure -> closeResources(); if (continuation.isActive) continuation.resumeWithException(failure) }
         } catch (failure: Exception) {
             closeResources()

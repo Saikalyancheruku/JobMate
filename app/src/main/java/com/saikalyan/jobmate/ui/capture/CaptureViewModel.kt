@@ -37,16 +37,23 @@ class CaptureViewModel @Inject constructor(
     private val clock: Clock,
 ) : ViewModel() {
     private val parser = JobFieldParser()
+    private var activeCaptureJob: Job? = null
     private val _state = MutableStateFlow(CaptureUiState())
     val state = _state.asStateFlow()
 
     init {
         viewModelScope.launch { controller.state.collect { _state.value = _state.value.copy(session = it) } }
         viewModelScope.launch {
+            controller.newJobRequests.collect {
+                activeCaptureJob = null
+                _state.value = _state.value.nextCaptureDraft().copy(message = "New job started. Capture its pages; tap NEXT before moving to another listing.")
+            }
+        }
+        viewModelScope.launch {
             controller.sections.collect { section ->
-                val parsed = parser.parse(section.text)
+                val parsed = parser.parse(section.screen)
                 val current = _state.value
-                val draft = current.nextCaptureDraft()
+                val draft = if (activeCaptureJob == null) current.nextCaptureDraft() else current
                 _state.value = draft.copy(
                     title = parsed.title?.value ?: draft.title,
                     company = parsed.company?.value ?: draft.company,
@@ -63,7 +70,7 @@ class CaptureViewModel @Inject constructor(
                     saving = true,
                     message = "Capture received. Saving this job automatically…",
                 )
-                saveCapturedSection(parsed, section.text)
+                saveCapturedSection(parsed, section.screen.text)
             }
         }
     }
@@ -124,54 +131,67 @@ class CaptureViewModel @Inject constructor(
 
     private suspend fun saveCapturedSection(parsed: com.saikalyan.jobmate.domain.usecase.ParsedJobFields, capturedText: String) {
         val now = clock.instant()
-        val title = parsed.title?.value?.trim().takeUnless { it.isNullOrBlank() }
-            ?: "Captured job ${now.toString().take(16).replace('T', ' ')}"
-        val company = parsed.company?.value?.trim().takeUnless { it.isNullOrBlank() }
-            ?: "Company not detected"
-        val normalized = parsed.sourceUrl?.value?.trim()?.lowercase().takeUnless { it.isNullOrBlank() }
-            ?: capturedText.lineSequence().map(String::trim).filter(String::isNotBlank).joinToString(" ").lowercase()
-                .ifBlank { "${title.lowercase()}|${company.lowercase()}|${parsed.location?.value.orEmpty().trim().lowercase()}" }
-        val fingerprint = "capture:" + MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray()).joinToString("") { "%02x".format(it) }
-        when (val existing = jobs.findByFingerprint(fingerprint)) {
-            is RepositoryResult.Success -> if (existing.value != null) {
-                _state.value = _state.value.copy(saving = false, duplicate = true, message = "This job is already saved. Capture the next listing when ready.")
-                controller.saved(title, company)
-                return
-            }
-            is RepositoryResult.Failure -> {
-                _state.value = _state.value.copy(saving = false, message = "Could not check whether this captured job already exists.")
-                controller.failed("Could not check whether this captured job already exists.")
-                return
+        val active = activeCaptureJob
+        var isNewJob = active == null
+        val baseJob = active ?: run {
+            val title = parsed.title?.value?.trim().takeUnless { it.isNullOrBlank() }
+                ?: "Captured job ${now.toString().take(16).replace('T', ' ')}"
+            val company = parsed.company?.value?.trim().takeUnless { it.isNullOrBlank() }
+                ?: "Company not detected"
+            val normalized = parsed.sourceUrl?.value?.trim()?.lowercase().takeUnless { it.isNullOrBlank() }
+                ?: capturedText.lineSequence().map(String::trim).filter(String::isNotBlank).joinToString(" ").lowercase()
+                    .ifBlank { "${title.lowercase()}|${company.lowercase()}|${parsed.location?.value.orEmpty().trim().lowercase()}" }
+            val fingerprint = "capture:" + MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray()).joinToString("") { "%02x".format(it) }
+            when (val existing = jobs.findByFingerprint(fingerprint)) {
+                is RepositoryResult.Success -> existing.value?.also { isNewJob = false } ?: Job(
+                    id = UUID.randomUUID().toString(), title = title, companyName = company,
+                    status = JobStatus.SAVED, source = "Screen capture",
+                    sourceUrl = parsed.sourceUrl?.value?.trim()?.ifBlank { null },
+                    captureMethod = "USER_CONSENTED_SCREEN_OCR", fingerprint = fingerprint,
+                    createdAt = now, updatedAt = now,
+                )
+                is RepositoryResult.Failure -> {
+                    _state.value = _state.value.copy(saving = false, message = "Could not check whether this captured job already exists.")
+                    controller.failed("Could not check whether this captured job already exists.")
+                    return
+                }
             }
         }
-
-        val job = Job(
-            id = UUID.randomUUID().toString(),
-            title = title,
-            companyName = company,
-            location = parsed.location?.value?.trim()?.ifBlank { null },
-            description = capturedText.trim().ifBlank { null },
-            skills = parsed.skills?.value.orEmpty().split(',').map(String::trim).filter(String::isNotBlank),
-            experienceMin = parsed.experience?.value?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() },
-            salaryText = parsed.salary?.value?.trim()?.ifBlank { null },
-            source = "Screen capture",
-            sourceUrl = parsed.sourceUrl?.value?.trim()?.ifBlank { null },
-            status = JobStatus.SAVED,
-            captureMethod = "USER_CONSENTED_SCREEN_OCR",
-            fingerprint = fingerprint,
-            createdAt = now,
+        val pageText = capturedText.trim()
+        val previousDescription = baseJob.description.orEmpty()
+        val mergedDescription = when {
+            pageText.isBlank() -> baseJob.description
+            previousDescription.isBlank() -> pageText
+            normalizeCapturedText(previousDescription).contains(normalizeCapturedText(pageText)) -> previousDescription
+            else -> "$previousDescription\n\n$pageText"
+        }
+        val parsedTitle = parsed.title?.value?.trim().orEmpty()
+        val parsedCompany = parsed.company?.value?.trim().orEmpty()
+        val mergedSkills = (baseJob.skills + parsed.skills?.value.orEmpty().split(',').map(String::trim))
+            .filter(String::isNotBlank).distinctBy { it.lowercase() }
+        val job = baseJob.copy(
+            title = if (baseJob.title.startsWith("Captured job ") && parsedTitle.isNotBlank()) parsedTitle else baseJob.title,
+            companyName = if (baseJob.companyName == "Company not detected" && parsedCompany.isNotBlank()) parsedCompany else baseJob.companyName,
+            location = baseJob.location ?: parsed.location?.value?.trim()?.ifBlank { null },
+            description = mergedDescription,
+            skills = mergedSkills,
+            experienceMin = baseJob.experienceMin ?: parsed.experience?.value?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() },
+            salaryText = baseJob.salaryText ?: parsed.salary?.value?.trim()?.ifBlank { null },
+            sourceUrl = baseJob.sourceUrl ?: parsed.sourceUrl?.value?.trim()?.ifBlank { null },
             updatedAt = now,
         )
+        activeCaptureJob = job
         when (jobs.save(job)) {
             is RepositoryResult.Success -> {
                 val latest = _state.value
                 _state.value = latest.copy(
                     saving = false,
                     saved = true,
-                    savedJobsInSession = latest.savedJobsInSession + 1,
-                    message = "Job saved automatically. You can review or edit it later from Jobs.",
+                    savedJobsInSession = latest.savedJobsInSession + (if (isNewJob) 1 else 0),
+                    message = if (isNewJob) "Job saved automatically. Capture more pages, or tap NEXT for another job."
+                    else "Page added to ${job.title}; the saved job now includes this screen. Tap NEXT before another listing.",
                 )
-                controller.saved(title, company)
+                controller.saved(job.title, job.companyName)
             }
             is RepositoryResult.Failure -> {
                 _state.value = _state.value.copy(saving = false, message = "Could not save this capture. Open JobMate to try capturing it again.")
@@ -179,6 +199,8 @@ class CaptureViewModel @Inject constructor(
             }
         }
     }
+
+    private fun normalizeCapturedText(value: String) = value.lineSequence().map(String::trim).filter(String::isNotBlank).joinToString(" ").lowercase()
 
     private fun CaptureUiState.nextCaptureDraft() = CaptureUiState(
         session = session,

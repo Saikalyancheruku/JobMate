@@ -5,6 +5,32 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
+val baseSemVer = rootProject.file("VERSION").readText().trim()
+require(Regex("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$").matches(baseSemVer)) {
+    "VERSION must contain a stable MAJOR.MINOR.PATCH SemVer value, for example 0.1.0."
+}
+val ciRunNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toLongOrNull()
+val ciRunAttempt = providers.environmentVariable("GITHUB_RUN_ATTEMPT").orNull?.toLongOrNull() ?: 1L
+require(ciRunAttempt in 1L..999L) { "GITHUB_RUN_ATTEMPT must be between 1 and 999 for monotonic Android version codes." }
+val defaultJobMateVersionName = if (ciRunNumber == null) {
+    "$baseSemVer+local.${System.currentTimeMillis()}"
+} else {
+    "$baseSemVer+ci.$ciRunNumber.$ciRunAttempt"
+}
+val defaultJobMateVersionCode = if (ciRunNumber == null) {
+    1L
+} else {
+    1_000_000L + ciRunNumber * 1_000L + ciRunAttempt
+}
+val jobMateVersionName = providers.gradleProperty("jobmateVersionName").orElse(defaultJobMateVersionName).get()
+val jobMateVersionCode = providers.gradleProperty("jobmateVersionCode").orElse(defaultJobMateVersionCode.toString()).get().toLongOrNull()
+    ?: error("jobmateVersionCode must be an integer.")
+require(Regex("^[0-9]+\\.[0-9]+\\.[0-9]+\\+[0-9A-Za-z.-]+$").matches(jobMateVersionName)) {
+    "JobMate versionName must be SemVer with build metadata, for example 0.1.0+ci.12.1."
+}
+require(jobMateVersionCode in 1L..2_100_000_000L) { "Calculated Android versionCode is outside Android's supported range." }
+logger.lifecycle("JobMate version: $jobMateVersionName (versionCode $jobMateVersionCode)")
+
 android {
     namespace = "com.saikalyan.jobmate"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -13,8 +39,8 @@ android {
         applicationId = "com.saikalyan.jobmate"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = jobMateVersionCode.toInt()
+        versionName = jobMateVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
