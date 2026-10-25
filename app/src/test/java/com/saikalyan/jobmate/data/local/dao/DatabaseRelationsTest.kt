@@ -51,7 +51,7 @@ class DatabaseRelationsTest {
             cursor.use { while (it.moveToNext()) add(it.getString(0)) }
         }
 
-        assertEquals(2, sql.version)
+        assertEquals(3, sql.version)
         assertTrue(
             tables.containsAll(
                 setOf(
